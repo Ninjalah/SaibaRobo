@@ -54,22 +54,44 @@ class Tile:
         if block_sight is None: block_sight = blocked
         self.block_sight = block_sight
 
+# rectangle on the map, used to characterize a room
+class Rect:
+    def __init__(self, x, y, w, h):
+        self.x1 = x
+        self.y1 = y
+        self.x2 = x + w
+        self.y2 = y + h
+
+# creates a room and fills with unblocked tiles
+def create_room(room):
+    global map
+
+    # go through the tiles in the rectangle to make them passable
+    for x in range(room.x1 + 1, room.x2):
+        for y in range(room.y1 + 1, room.y2):
+            map[x][y].blocked = False
+            map[x][y].block_sight = False
+
 # inits map based on global map properties
 def make_map():
     global map
 
-    # fill map with "unblocked" tiles
-    map = [[ Tile(False)
+    # fill map with "blocked" tiles
+    map = [[ Tile(True)
         for y in range(MAP_HEIGHT) ]
             for x in range(MAP_WIDTH) ]
 
-    #############################
-    # Place two pillars to TEST #
-    #############################
-    map[30][22].blocked = True
-    map[30][22].block_sight = True
-    map[50][22].blocked = True
-    map[50][22].block_sight = True
+    ############################
+    # Create two rooms to TEST #
+    ############################
+    room1 = Rect(20, 15, 10, 15)
+    room2 = Rect(50, 15, 10, 15)
+    create_room(room1)
+    create_room(room2)
+
+    # set player's initial coordinates
+    player.x = 25
+    player.y = 23
 
 # render all objects in object list
 def render_all():
