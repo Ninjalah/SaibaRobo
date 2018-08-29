@@ -89,9 +89,26 @@ def make_map():
     create_room(room1)
     create_room(room2)
 
+    # carves a horizontal tunnel between the two rooms
+    create_h_tunnel(25, 55, 23)
+
     # set player's initial coordinates
     player.x = 25
     player.y = 23
+
+# carves a horizontal tunnel
+def create_h_tunnel(x1, x2, y):
+    global map
+    for x in range(min(x1, x2), max(x1, x2) + 1):
+        map[x][y].blocked = False
+        map[x][y].block_sight = False
+
+# carves a vertical tunnel
+def create_v_tunnel(y1, y2, x):
+    global map
+    for y in range(min(y1, y2), max(y1, y2) + 1):
+        map[x][y].blocked = False
+        map[x][y].block_sight = False
 
 # render all objects in object list
 def render_all():
