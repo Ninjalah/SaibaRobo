@@ -15,7 +15,7 @@ def handle_keys():
 
     # keys to toggle FULLSCREEN, exit game
     key = libtcod.console_wait_for_keypress(True)
-    if key.vk == libtcod.KEY_ENTER and key.lalt:
+    if key.vk == libtcod.KEY_ENTER and key.ralt:
         # Alt + Enter: toggles fullscreen
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
 
