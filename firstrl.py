@@ -16,6 +16,11 @@ color_dark_ground = libtcod.Color(50, 50, 150)
 
 LIMIT_FPS = 20
 
+# dungeon generation params
+ROOM_MAX_SIZE = 10
+ROOM_MIN_SIZE = 6
+MAX_ROOMS = 30
+
 # track PC position
 playerx = SCREEN_WIDTH/2
 playery = SCREEN_HEIGHT/2
@@ -62,6 +67,16 @@ class Rect:
         self.x2 = x + w
         self.y2 = y + h
 
+    def center(self):
+        center_x = (self.x1 + self.x2) / 2
+        center_y = (self.y1 + self.y2) / 2
+        return (center_x, center_y)
+
+    # returns true if this rectangle intersects with another one
+    def intersect(self, other):
+        return (self.x1 <= other.x2 and self.x2 >= other.x1 and
+                self.y1 <= other.y2 and self.y2 >= other.y1)
+
 # creates a room and fills with unblocked tiles
 def create_room(room):
     global map
@@ -81,20 +96,68 @@ def make_map():
         for y in range(MAP_HEIGHT) ]
             for x in range(MAP_WIDTH) ]
 
-    ############################
-    # Create two rooms to TEST #
-    ############################
-    room1 = Rect(20, 15, 10, 15)
-    room2 = Rect(50, 15, 10, 15)
-    create_room(room1)
-    create_room(room2)
+    # loop to iterate until max num of rooms, assigning random coordinates and sizes
+    rooms = []
+    num_rooms = 0
 
-    # carves a horizontal tunnel between the two rooms
-    create_h_tunnel(25, 55, 23)
+    for r in range(MAX_ROOMS):
+        # random width & height
+        w = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
+        h = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
+        # random position without going out of map boundaries
+        x = libtcod.random_get_int(0, 0, MAP_WIDTH - w - 1)
+        y = libtcod.random_get_int(0, 0, MAP_HEIGHT - h - 1)
 
-    # set player's initial coordinates
-    player.x = 25
-    player.y = 23
+        # "Rect" class makes rectangles easier to work with
+        new_room = Rect(x, y, w, h)
+
+        # run through the other rooms and see if they intersect with this one
+        failed = False
+        for other_room in rooms:
+            if new_room.intersect(other_room):
+                failed = True
+                break
+
+        if not failed:
+            # this means there are no intersections, so room is valid
+
+            # "paint" it to the map's tiles
+            create_room(new_room)
+
+            # center coordinates of new room, will be useful later
+            (new_x, new_y) = new_room.center()
+            
+            #################################################################################################
+            # optional: print "room number" to see how the map drawing worked                               #
+            #          we may have more than ten rooms, so print 'A' for the first room, 'B' for the next...#
+            #################################################################################################
+            #room_no = Object(new_x, new_y, chr(65+num_rooms), libtcod.white)
+            #objects.insert(0, room_no) #draw early, so monsters are drawn on top
+
+            if num_rooms == 0:
+                # this is the first room, PC will start here
+                player.x = new_x
+                player.y = new_y
+            else:
+                # all rooms after first:
+                #connect it to the previous room with a tunnel
+
+                # center coordinates of previous room
+                (prev_x, prev_y) = rooms[num_rooms-1].center()
+
+                # draw a coin (random number that is 0 or 1)
+                if libtcod.random_get_int(0, 0, 1) == 1:
+                    # first move horizontally, then vertically
+                    create_h_tunnel(prev_x, new_x, prev_y)
+                    create_v_tunnel(prev_y, new_y, new_x)
+                else:
+                    # first move vertically, then horizontally
+                    create_v_tunnel(prev_y, new_y, prev_x)
+                    create_h_tunnel(prev_x, new_x, new_y)
+                
+            # finally, append new room to list
+            rooms.append(new_room)
+            num_rooms += 1
 
 # carves a horizontal tunnel
 def create_h_tunnel(x1, x2, y):
