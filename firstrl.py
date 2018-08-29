@@ -6,6 +6,13 @@ import libtcodpy as libtcod
 # libtcod settings, size of window
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
+# size of map
+MAP_WIDTH = 80
+MAP_HEIGHT = 45
+
+# set color of map tiles
+color_dark_wall = libtcod.Color(0, 0, 100)
+color_dark_ground = libtcod.Color(50, 50, 150)
 
 LIMIT_FPS = 20
 
@@ -36,10 +43,55 @@ class Object:
     def clear(self):
         libtcod.console_put_char(con, self.x, self.y, ' ', libtcod.BKGND_NONE)
 
+# tile of the map and its properties
+class Tile:
+    def __init__(self, blocked, block_sight = None):
+        self.blocked = blocked
+
+        # by default, if a tile is blocked, it also blocks sight
+        if block_sight is None: block_sight = blocked
+        self.block_sight = block_sight
+
+# inits map based on global map properties
+def make_map():
+    global map
+
+    # fill map with "unblocked" tiles
+    map = [[ Tile(False)
+        for y in range(MAP_HEIGHT) ]
+            for x in range(MAP_WIDTH) ]
+
+    #############################
+    # Place two pillars to TEST #
+    #############################
+    map[30][22].blocked = True
+    map[30][22].block_sight = True
+    map[50][22].blocked = True
+    map[50][22].block_sight = True
+
+# render all objects in object list
+def render_all():
+    global color_light_wall
+    global color_light_ground
+
+    # iterate through all tiles and set their background color
+    for y in range(MAP_HEIGHT):
+        for x in range(MAP_WIDTH):
+            wall = map[x][y].block_sight
+            if wall:
+                libtcod.console_set_char_background(con, x, y, color_dark_wall, libtcod.BKGND_SET)
+            else:
+                libtcod.console_set_char_background(con, x, y, color_dark_ground, libtcod.BKGND_SET)
+
+    # draw all objects in object list
+    for object in objects:
+        object.draw()
+
+    # blit contents of new console to root console, display
+    libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
+
 # keyboard input support
 def handle_keys():
-    global playerx, playery
-
     # keys to toggle FULLSCREEN, exit game
     key = libtcod.console_wait_for_keypress(True)
     if key.vk == libtcod.KEY_ENTER and key.ralt:
@@ -85,13 +137,13 @@ npc = Object(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, '@', libtcod.yellow)
 # the list of objects
 objects = [npc, player]
 
+# generate map (not drawn to the screen at this point)
+make_map()
+
 while not libtcod.console_is_window_closed():
     # draw all objects in the list
-    for object in objects:
-        object.draw()
+    render_all()
 
-    # blit contents of new console to root console, display
-    libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
     # present changes to screen
     libtcod.console_flush()
 
