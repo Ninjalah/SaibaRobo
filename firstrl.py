@@ -230,6 +230,18 @@ def handle_keys():
 
     elif libtcod.console_is_key_pressed(libtcod.KEY_KP3):
         player.move(1, 1)
+    
+    elif libtcod.console_is_key_pressed(libtcod.KEY_UP):
+        player.move(0, -1)
+    
+    elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
+        player.move(0, 1)
+
+    elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
+        player.move(-1, 0)
+
+    elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
+        player.move(1, 0)
 
 ##############################################################################
 # Main loop, keeps running the logic of game as long as window is not closed #
