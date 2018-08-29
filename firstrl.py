@@ -9,6 +9,33 @@ SCREEN_HEIGHT = 50
 
 LIMIT_FPS = 20
 
+# track PC position
+playerx = SCREEN_WIDTH/2
+playery = SCREEN_HEIGHT/2
+
+# generic object definition: player, monster, item, stairs, etc.
+# always represented by a character on screen
+class Object:
+    def __init__(self, x, y, char, color):
+        self.x = x
+        self.y = y
+        self.char = char
+        self.color = color
+
+    # move by given amount
+    def move(self, dx, dy):
+        self.x += dx
+        self.y += dy
+
+    # set the color and then draw char that represents this object at its position
+    def draw(self):
+        libtcod.console_set_default_foreground(con, self.color)
+        libtcod.console_put_char(con, self.x, self.y, self.char, libtcod.BKGND_NONE)
+
+    # erases the char that represents this object
+    def clear(self):
+        libtcod.console_put_char(con, self.x, self.y, ' ', libtcod.BKGND_NONE)
+
 # keyboard input support
 def handle_keys():
     global playerx, playery
@@ -25,46 +52,52 @@ def handle_keys():
 
     # movement keys
     if libtcod.console_is_key_pressed(libtcod.KEY_UP):
-        playery -= 1
+        player.move(0, -1)
     
     elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
-        playery += 1
+        player.move(0, 1)
 
     elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
-        playerx -= 1
+        player.move(-1, 0)
 
     elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
-        playerx += 1
+        player.move(1, 0)
 
-############################################################################
-# Main loop, keeps running the logic of game as long as window is not closed
-############################################################################
+##############################################################################
+# Main loop, keeps running the logic of game as long as window is not closed #
+##############################################################################
 
 # Set font
 libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-
 # initialize libtcod window
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
-
 # set fps
 libtcod.sys_set_fps(LIMIT_FPS)
+# initialize off-screen console
+con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
 
-# track PC position
-playerx = SCREEN_WIDTH/2
-playery = SCREEN_HEIGHT/2
+# create object representing PC
+player = Object(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, '@', libtcod.white)
+
+# create an NPC
+npc = Object(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, '@', libtcod.yellow)
+
+# the list of objects
+objects = [npc, player]
 
 while not libtcod.console_is_window_closed():
-    # sets print location to console, font color to white
-    libtcod.console_set_default_foreground(0, libtcod.white)
+    # draw all objects in the list
+    for object in objects:
+        object.draw()
 
-    # print a character to (1, 1)
-    libtcod.console_put_char(0, playerx, playery, '@', libtcod.BKGND_NONE)
-
+    # blit contents of new console to root console, display
+    libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
     # present changes to screen
     libtcod.console_flush()
 
-    # print a space to replace PC char after moving
-    libtcod.console_put_char(0, playerx, playery, ' ', libtcod.BKGND_NONE)
+    # erase all objects at their old locations before they move
+    for object in objects:
+        object.clear()
 
     # handle keys and exit game if needed
     exit = handle_keys()
