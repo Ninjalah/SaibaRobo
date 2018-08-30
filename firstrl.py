@@ -1,4 +1,5 @@
 import libtcodpy as libtcod
+import math
  
 #actual size of the window
 SCREEN_WIDTH = 80
@@ -64,19 +65,44 @@ class Rect:
 class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
-    def __init__(self, x, y, char, name, color, blocks=False):
+    def __init__(self, x, y, char, name, color, blocks=False, fighter=None, ai=None):
         self.x = x
         self.y = y
         self.char = char
         self.color = color
         self.name = name
         self.blocks = blocks
+        self.fighter = fighter
+        if self.fighter: #let the fighter component know who owns it
+            self.fighter.owner = self
+
+        self.ai = ai
+        if self.ai: #let the AI component know who owns it
+            self.ai.owner = self
  
     def move(self, dx, dy):
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
             self.x += dx
             self.y += dy
+
+    def move_towards(self, target_x, target_y):
+        # vector from this object to the target, and distance
+        dx = target_x - self.x
+        dy = target_y - self.y
+        distance = math.sqrt(dx ** 2 + dy ** 2)
+
+        # normalize it to length 1 (preserving direction), then round it and
+        # convert to integer so the movement is restricted to the map grid
+        dx = int(round(dx / distance))
+        dy = int(round(dy / distance))
+        self.move(dx, dy)
+
+    def distance_to(self, other):
+        # return the distance to another object
+        dx = other.x - self.x
+        dy = other.y - self.y
+        return math.sqrt(dx ** 2 + dy ** 2)
  
     def draw(self):
         #only show if it's visible to the player
@@ -88,6 +114,29 @@ class Object:
     def clear(self):
         #erase the character that represents this object
         libtcod.console_put_char(con, self.x, self.y, ' ', libtcod.BKGND_NONE)
+
+# combat-related properties and methods (monster, player, NPC)
+class Fighter:
+    def __init__(self, hp, defense, power):
+        self.max_hp = hp
+        self.hp = hp
+        self.defense = defense
+        self.power = power
+
+# AI for basic monsters
+class BasicMonster:
+    def take_turn(self):
+        # a basic monster takes its turn. If you can see it, it can see you
+        monster = self.owner
+        if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
+
+            # move towards player if far away
+            if monster.distance_to(player) >= 2:
+                monster.move_towards(player.x, player.y)
+            
+            # close enough, attack! (if the player is still alive)
+            elif player.fighter.hp > 0:
+                print 'The attack of the ' + monster.name + ' bounces off of your nanosuit!'
  
 # tests a map tile if blocked or not
 def is_blocked(x, y):
@@ -205,13 +254,19 @@ def place_objects(room):
             choice = libtcod.random_get_int(0, 0, 100)
             if choice < 5:
                 # 5% create Terminatron
-                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True)
+                fighter_component = Fighter(hp=100, defense=5, power=10)
+                ai_component = BasicMonster()
+                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component)
             elif choice < 5 + 25:
                 # 25% create Mecharachnid
-                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True)
+                fighter_component = Fighter(hp=15, defense=1, power=4)
+                ai_component = BasicMonster()
+                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component)
             else:
                 # 70% create Cyborg
-                monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True)
+                fighter_component = Fighter(hp=10, defense=0, power=2)
+                ai_component = BasicMonster()
+                monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component)
 
             objects.append(monster)
  
@@ -272,7 +327,7 @@ def player_move_or_attack(dx, dy):
 
     # attack if target found, otherwise move
     if target is not None:
-        print 'The ' + target.name + ' laughs as your fleshy hands glance off of its steel exoskeleton!'
+        print 'The ' + target.name + ' beeps mechanically as your fleshy hands glance off of its steel exoskeleton!'
     else:
         player.move(dx, dy)
         fov_recompute = True
@@ -354,7 +409,8 @@ libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
  
 #create object representing the player
-player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True)
+fighter_component = Fighter(hp=30, defense=2, power=5)
+player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
  
 #the list of objects with those two
 objects = [player]
@@ -387,5 +443,5 @@ while not libtcod.console_is_window_closed():
     # let monsters take their turn
     if game_state == 'playing' and player_action != 'didnt-take-turn':
         for object in objects:
-            if object != player:
-                print 'The ' + object.name + ' whirs to life!'
+            if object.ai:
+                object.ai.take_turn()
