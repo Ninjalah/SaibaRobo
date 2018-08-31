@@ -13,3 +13,5 @@ Terminatron: A large, hulking robot that mercilessly pursues interlopers.
 ## Monsters
 Cyborg
 * **AI**: Feels fear, and if damaged enough, runs away from the player (at a reduced speed to allow players to catch up with them). Runs away from player FoV, and if not seen, hides in hidable locations (this can be punctuated with a sound or console text, ex: "You hear the sound of a metal door closing!"
+
+* **Mechanic**: Cyborg brains are jackable, meaning the player can obtain information from fallen Cyborgs. This will reveal the location of items/monsters that the Cyborg knows about (has seen before?)
