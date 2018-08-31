@@ -16,7 +16,7 @@ Cyborg
 
 * **AI**: If damaged/low on ammo, can pick up health and/or ammo packs to use against the player. Only picks up ammo if out of ammo, only picks up health if in critical condition (while running away from player, for example).
 
-* **Mechanic**: Cyborg brains are jackable, meaning the player can obtain information from fallen Cyborgs. This will reveal the location of items/monsters that the Cyborg knows about (has seen before?). Also reveals some information about the Cyborg personally (remnants of human life, duration employed as a military cyborg, likes/dislikes, etc.).
+* **Mechanic**: Cyborg brains are jackable, meaning the player can obtain information from fallen Cyborgs. This will reveal the location of items/monsters that the Cyborg knows about (has seen before?) through the fog-of-war. Also reveals some information about the Cyborg personally (remnants of human life, duration employed as a military cyborg, likes/dislikes, etc.).
 
 Robotic Enemies
 * **AI**: Relentlessly pursue player until destruction.
