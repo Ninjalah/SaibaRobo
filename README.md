@@ -12,7 +12,7 @@ Terminatron: A large, hulking robot that mercilessly pursues interlopers. Massiv
 
 ## Monsters
 Cyborg
-* **AI**: Feels fear, and if critically damaged, runs away from the player (at a reduced speed to allow players to catch up with them). Runs away from player FoV, and if not seen, hides in hidable locations, such as lockers (this can be punctuated with a sound or console text, ex: "You hear the sound of a metal door closing!"
+* **AI**: Feels fear, and if critically damaged, runs away from the player (at a reduced speed to allow players to catch up with them). Runs away from player FoV, and if not seen, hides in hidable locations, such as lockers (this can be punctuated with a sound or console text, ex: "You hear the sound of a metal door closing!")
 
 * **AI**: If damaged/low on ammo, can pick up health and/or ammo packs to use against the player. Only picks up ammo if out of ammo, only picks up health if in critical condition (while running away from player, for example).
 
