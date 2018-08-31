@@ -24,7 +24,7 @@ Robotic Enemies
 Mecharachnid
 * **Combat**: Can only use melee.
 
-* **AI/Mechanic**: Can jump onto ceilings if damaged enough. Will attempt to land on player after a certain # of turns. While walking on ceiling, is invisible/untargettable to player. (In lore, why would the player be unable to see the mecharachnid on the ceiling? Perhaps change char color to very light (still visible), but make accuracy against this monster incredibly reduced while ceiling-bound. Cannot attack while ceiling-bound (melee only).
+* **AI/Mechanic**: Can jump onto ceilings if damaged enough. Will attempt to land on player after a certain # of turns. While walking on ceiling, is invisible/untargettable to player. (In lore, why would the player be unable to see the mecharachnid on the ceiling? Perhaps change char color to very light (still visible), but make accuracy against this monster incredibly reduced while ceiling-bound. Cannot attack while ceiling-bound (melee only)).
   * **If landing and misses player**: Nothing special happens, lands on ground and normal stats resume.
   * **If landing and lands on player**: Player makes a saving roll (based on DEX?). 
     * **If roll is successful**: Parry mecharachnid landing, putting mecharachnid next to player (grounded) and player takes minimal damage (perhaps none if DEX is high enough?). 
@@ -44,3 +44,4 @@ Terminatron
     * **If successful charge**: Hits player for massive damage, player is knocked back.
     * **If unsuccessful charge (hits wall before player)**: Is stunned for multiple turns, takes minor damage.
     * **After any charge**: Picks a random omnidirectional vector and charges again.
+  * **If dies while charging**: Explodes, dealing damage to any player/monsters in near vicinity.
