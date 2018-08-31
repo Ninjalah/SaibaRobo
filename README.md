@@ -1,6 +1,12 @@
 # SaibaRobo
 Description: Cyberpunk Roguelike Action
 
+## Player
+### Stats
+* HP: Player's current health points. Reach 0, player dies.
+* AP: Attack power. Increases the damage done by the player.
+* DF: Defense. Decreases damage received by the player.
+
 ## Monsters
 Cyborg: Normal cybernetically enhanced human. Low health, low defense, low attack power. The most common monster type.
 
@@ -9,6 +15,16 @@ Mecharachnid: A robotic spider-like machine. Medium health, medium defense, medi
 Terminatron: A large, hulking robot that mercilessly pursues interlopers. Massive health, high defense, high attack power.
 
 # Brainstorming
+
+## Player
+### Stats
+* DX/CN: (Dexterity/Cunning) Determines player ability to make saving throws in dire situations (such as, mecharachnid grapple).
+* IN/TC: (Intellect/Technical) Determines the success rate of certain technical rolls, such as success chance when jacking a fallen Cyborg's brain.
+
+### Weapons
+General section for weapons used by the player character (and some monsters).
+
+* **Pistol**: Basic semi-automatic pistol. Does minimal damage, has average crit chance, uses bullets.
 
 ## Monsters
 Cyborg
