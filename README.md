@@ -33,7 +33,7 @@ Mecharachnid
 Terminatron
 * **Combat**: Can only use melee (pick up other weapons?)
 
-* **AI**: The mission is to destroy the player and nothing else, and will relentlessly pursue. Breaks doors when moving through them.
+* **AI**: The mission is to destroy the player and nothing else, and will relentlessly pursue. Breaks doors when moving through them while pursuing the player.
 
 * **Combat/AI**: At 10% health, a servo motor connection is damaged, disabling the Terminatron's legs, arms, or head.
   * **If legs disabled**: Crawls after player using arms, has reduced speed.
