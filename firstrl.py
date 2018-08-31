@@ -103,6 +103,12 @@ class Object:
         dx = other.x - self.x
         dy = other.y - self.y
         return math.sqrt(dx ** 2 + dy ** 2)
+
+    # make this object be drawn first, so all others appear above it if they're in the same tile
+    def send_to_back(self):
+        global objects
+        objects.remove(self)
+        objects.insert(0, self)
  
     def draw(self):
         #only show if it's visible to the player
@@ -117,11 +123,34 @@ class Object:
 
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
-    def __init__(self, hp, defense, power):
+    def __init__(self, hp, defense, power, death_function=None):
         self.max_hp = hp
         self.hp = hp
         self.defense = defense
         self.power = power
+        self.death_function = death_function
+
+    # a simple formula for attack damage
+    def attack(self, target):
+        damage = self.power - target.fighter.defense
+
+        if damage > 0:
+            # make the target take some damage
+            print self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.'
+            target.fighter.take_damage(damage)
+        else:
+            print self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!'
+
+    # apply damage if possible
+    def take_damage(self, damage):
+        if damage > 0:
+            self.hp -= damage
+
+            # check for death. if there's a death function, call it
+            if self.hp <= 0:
+                function = self.death_function
+                if function is not None:
+                    function(self.owner)
 
 # AI for basic monsters
 class BasicMonster:
@@ -136,7 +165,7 @@ class BasicMonster:
             
             # close enough, attack! (if the player is still alive)
             elif player.fighter.hp > 0:
-                print 'The attack of the ' + monster.name + ' bounces off of your nanosuit!'
+                monster.fighter.attack(player)
  
 # tests a map tile if blocked or not
 def is_blocked(x, y):
@@ -254,17 +283,17 @@ def place_objects(room):
             choice = libtcod.random_get_int(0, 0, 100)
             if choice < 5:
                 # 5% create Terminatron
-                fighter_component = Fighter(hp=100, defense=5, power=10)
+                fighter_component = Fighter(hp=100, defense=5, power=10, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component)
             elif choice < 5 + 25:
                 # 25% create Mecharachnid
-                fighter_component = Fighter(hp=15, defense=1, power=4)
+                fighter_component = Fighter(hp=15, defense=1, power=4, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component)
             else:
                 # 70% create Cyborg
-                fighter_component = Fighter(hp=10, defense=0, power=2)
+                fighter_component = Fighter(hp=10, defense=0, power=2, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component)
 
@@ -305,10 +334,16 @@ def render_all():
  
     #draw all objects in the list
     for object in objects:
-        object.draw()
+        if object != player:
+            object.draw()
+    player.draw()
  
     #blit the contents of "con" to the root console
     libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
+
+    # print the player's stats
+    libtcod.console_set_default_foreground(con, libtcod.white)
+    libtcod.console_print_ex(con, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT, 'HP: ' + str(player.fighter.hp) + '/' + str(player.fighter.max_hp))
 
 # determines play movement/attack
 def player_move_or_attack(dx, dy):
@@ -321,13 +356,13 @@ def player_move_or_attack(dx, dy):
     # attempt to find attackable object there
     target = None
     for object in objects:
-        if object.x == x and object.y == y:
+        if object.fighter and object.x == x and object.y == y:
             target = object
             break
 
     # attack if target found, otherwise move
     if target is not None:
-        print 'The ' + target.name + ' beeps mechanically as your fleshy hands glance off of its steel exoskeleton!'
+        player.fighter.attack(target)
     else:
         player.move(dx, dy)
         fov_recompute = True
@@ -397,7 +432,27 @@ def handle_keys():
 
         else:
             return 'didnt-take-turn'
- 
+
+# ends game is player dies!
+def player_death(player):
+    global game_state
+    print 'You died!'
+    game_state = 'dead'
+
+    # for added effect, transform the player into a corpse!
+    player.char = '%'
+    player.color = libtcod.dark_red
+
+# transform into a nasty corpse! it doesn't block, can't be attacked, and doesn't move
+def monster_death(monster):
+     print monster.name.capitalize() + ' is dead!'
+     monster.char = '%'
+     monster.color = libtcod.dark_red
+     monster.blocks = False
+     monster.fighter = None
+     monster.ai = None
+     monster.name = 'remains of ' + monster.name
+     monster.send_to_back()
  
 #############################################
 # Initialization & Main Loop
@@ -409,7 +464,7 @@ libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
  
 #create object representing the player
-fighter_component = Fighter(hp=30, defense=2, power=5)
+fighter_component = Fighter(hp=30, defense=0, power=5, death_function=player_death)
 player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
  
 #the list of objects with those two
