@@ -1,6 +1,8 @@
 # SaibaRobo
 Description: Cyberpunk Roguelike Action
 
+**Current tutorial progress**: At "Sword-fighting": http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_python%2Blibtcod,_part_6
+
 ## Player
 ### Stats
 * HP: Player's current health points. Reach 0, player dies.
