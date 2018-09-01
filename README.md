@@ -1,7 +1,7 @@
 # SaibaRobo
 Description: Cyberpunk Roguelike Action
 
-**Current tutorial progress**: At "Sword-fighting": http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_python%2Blibtcod,_part_6
+**Current tutorial progress**: At "The message log": http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_python%2Blibtcod,_part_7
 
 ## Player
 ### Stats
