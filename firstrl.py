@@ -232,6 +232,14 @@ class Item:
             objects.remove(self.owner)
             message('You picked up a ' + self.owner.name + '!', libtcod.green)
 
+    def drop(self):
+        # add to the map and remove from the player's inventory. also, place it at the player's coordinates
+        objects.append(self.owner)
+        inventory.remove(self.owner)
+        self.owner.x = player.x
+        self.owner.y = player.y
+        message('You dropped a ' + self.owner.name + '.', libtcod.yellow)
+
     def use(self):
         # just call the "use_function" if it is defined
         if self.use_function is None:
@@ -592,6 +600,12 @@ def handle_keys():
         elif key.vk == libtcod.KEY_KP3:
             player_move_or_attack(1, 1)
             fov_recompute = True
+
+        elif key.vk == libtcod.KEY_BACKSPACE:
+            # show the inventory; if an item is selected, drop it
+            chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
+            if chosen_item is not None:
+                chosen_item.drop()
 
         else:
             # test for other keys
