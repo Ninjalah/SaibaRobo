@@ -3,6 +3,8 @@ Description: Cyberpunk Roguelike Action
 
 **Current tutorial progress**: At "The message log": http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_python%2Blibtcod,_part_7
 
+**Add mouse support for main menu**: Instructions here: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Mouse-driven_Menus
+
 ## Player
 ### Stats
 * HP: Player's current health points. Reach 0, player dies.

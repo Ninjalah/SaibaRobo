@@ -1,6 +1,7 @@
 import libtcodpy as libtcod
 import math
 import textwrap
+import shelve
  
 #actual size of the window
 SCREEN_WIDTH = 80
@@ -714,6 +715,10 @@ def cast_impact_grenade():
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
+# a box for messages straight to MAIN MENU
+def msgbox(text, width=50):
+    menu(text, [], width) #use menu() as a sort of "message box"
+
 # handle player inputs
 def handle_keys():
     global fov_recompute, key
@@ -724,8 +729,6 @@ def handle_keys():
  
     elif key.vk == libtcod.KEY_ESCAPE:
         return 'exit'  #exit game
-
-    print('Game state is ' + game_state)
 
     if game_state == 'playing':
         #movement keys
@@ -806,6 +809,36 @@ def handle_keys():
 # Initialization & Main Loop                #
 #############################################
 
+# SAVE A GAME
+def save_game():
+    # open a new empty shelve (possibly overwriting an old one) to write the game data
+    file = shelve.open('savegame', 'n')
+    file['map'] = map
+    file['objects'] = objects
+    file['player_index'] = objects.index(player) # index of player in objects list. Shelve saves variable references recursively, meaning that
+    # if you attempt file['player'] = player, then you'll get two player objects! This is because one instance is saved by file['objects'] = objects
+    # and another by file['player'] = player. To avoid this, we simply save the index of the player in the list.
+    file['inventory'] = inventory
+    file['game_msgs'] = game_msgs
+    file['game_state'] = game_state
+    file.close()
+
+# LOAD A SAVED GAME
+def load_game():
+    # open the previously saved shelve and load the game data
+    global map, objects, player, inventory, game_msgs, game_state
+
+    file = shelve.open('savegame', 'r')
+    map = file['map']
+    objects = file['objects']
+    player = objects[file['player_index']] # get index of player in objects list and access it
+    inventory = file['inventory']
+    game_msgs = file['game_msgs']
+    game_state = file['game_state']
+    file.close()
+
+    initialize_fov()
+
 # START A NEW GAME
 def new_game():
     global player, inventory, game_msgs, game_state
@@ -870,6 +903,8 @@ def play_game():
         #handle keys and exit game if needed
         player_action = handle_keys()
         if player_action == 'exit':
+            # saves game automatically on exit
+            save_game()
             break
 
         # let monsters take their turn
@@ -899,6 +934,13 @@ def main_menu():
 
         if choice == 0: #new game
             new_game()
+            play_game()
+        elif choice == 1: #load last game
+            try:
+                load_game()
+            except:
+                msgbox('\n No saved game to load.\n', 24)
+                continue
             play_game()
         elif choice == 2: # quit
             break
