@@ -340,9 +340,9 @@ def place_objects(room):
 
         # only place it if the tile is NOT BLOCKED
         if not is_blocked(x, y):
-            # create a healing potion
+            # create a health pack
             item_component = Item()
-            item = Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
+            item = Object(x, y, '!', 'health pack', libtcod.violet, item=item_component)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
@@ -545,7 +545,7 @@ def handle_keys():
                     if object.x == player.x and object.y == player.y and object.item:
                         object.item.pick_up()
                         break
-                        
+
             return 'didnt-take-turn'
 
 # ends game is player dies!
