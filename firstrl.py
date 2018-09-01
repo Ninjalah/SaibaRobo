@@ -541,92 +541,6 @@ def player_move_or_attack(dx, dy):
     else:
         player.move(dx, dy)
         fov_recompute = True
- 
-# handle player inputs
-def handle_keys():
-    global fov_recompute, key
- 
-    if key.vk == libtcod.KEY_ENTER and key.ralt:
-        #Alt+Enter: toggle fullscreen
-        libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
- 
-    elif key.vk == libtcod.KEY_ESCAPE:
-        return 'exit'  #exit game
-
-    if game_state == 'playing':
-        #movement keys
-        if key.vk == libtcod.KEY_UP:
-            player_move_or_attack(0, -1)
-            fov_recompute = True
-    
-        elif key.vk == libtcod.KEY_DOWN:
-            player_move_or_attack(0, 1)
-            fov_recompute = True
-    
-        elif key.vk == libtcod.KEY_LEFT:
-            player_move_or_attack(-1, 0)
-            fov_recompute = True
-    
-        elif key.vk == libtcod.KEY_RIGHT:
-            player_move_or_attack(1, 0)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP8:
-            player_move_or_attack(0, -1)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP2:
-            player_move_or_attack(0, 1)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP4:
-            player_move_or_attack(-1, 0)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP6:
-            player_move_or_attack(1, 0)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP1:
-            player_move_or_attack(-1, 1)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP7:
-            player_move_or_attack(-1, -1)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP9:
-            player_move_or_attack(1, -1)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_KP3:
-            player_move_or_attack(1, 1)
-            fov_recompute = True
-
-        elif key.vk == libtcod.KEY_BACKSPACE:
-            # show the inventory; if an item is selected, drop it
-            chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
-            if chosen_item is not None:
-                chosen_item.drop()
-
-        else:
-            # test for other keys
-            key_char = chr(key.c)
-
-            if key_char == 'g':
-                # pick up an item
-                for object in objects: #look for an item in the player's tile
-                    if object.x == player.x and object.y == player.y and object.item:
-                        object.item.pick_up()
-                        break
-
-            if key_char == 'i':
-                # show the inventory; if an item is selected, use it
-                chosen_item = inventory_menu('Press the key next to an item to use it, or any other to cancel.\n')
-                if chosen_item is not None:
-                    chosen_item.use()
-
-            return 'didnt-take-turn'
 
 # return the position of a tile left-clicked in player's FOV (optionally in a range), or (None, None) if right-clicked
 def target_tile(max_range=None):
@@ -800,6 +714,94 @@ def cast_impact_grenade():
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
+# handle player inputs
+def handle_keys():
+    global fov_recompute, key
+ 
+    if key.vk == libtcod.KEY_ENTER and key.ralt:
+        #Alt+Enter: toggle fullscreen
+        libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+ 
+    elif key.vk == libtcod.KEY_ESCAPE:
+        return 'exit'  #exit game
+
+    print('Game state is ' + game_state)
+
+    if game_state == 'playing':
+        #movement keys
+        if key.vk == libtcod.KEY_UP:
+            player_move_or_attack(0, -1)
+            fov_recompute = True
+    
+        elif key.vk == libtcod.KEY_DOWN:
+            player_move_or_attack(0, 1)
+            fov_recompute = True
+    
+        elif key.vk == libtcod.KEY_LEFT:
+            player_move_or_attack(-1, 0)
+            fov_recompute = True
+    
+        elif key.vk == libtcod.KEY_RIGHT:
+            player_move_or_attack(1, 0)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP8:
+            player_move_or_attack(0, -1)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP2:
+            player_move_or_attack(0, 1)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP4:
+            player_move_or_attack(-1, 0)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP6:
+            player_move_or_attack(1, 0)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP1:
+            player_move_or_attack(-1, 1)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP7:
+            player_move_or_attack(-1, -1)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP9:
+            player_move_or_attack(1, -1)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_KP3:
+            player_move_or_attack(1, 1)
+            fov_recompute = True
+
+        elif key.vk == libtcod.KEY_BACKSPACE:
+            # show the inventory; if an item is selected, drop it
+            chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
+            if chosen_item is not None:
+                chosen_item.drop()
+
+        else:
+            # test for other keys
+            key_char = chr(key.c)
+
+            if key_char == 'g':
+                # pick up an item
+                for object in objects: #look for an item in the player's tile
+                    if object.x == player.x and object.y == player.y and object.item:
+                        object.item.pick_up()
+                        break
+
+            if key_char == 'i':
+                # show the inventory; if an item is selected, use it
+                chosen_item = inventory_menu('Press the key next to an item to use it, or any other to cancel.\n')
+                if chosen_item is not None:
+                    chosen_item.use()
+
+            return 'didnt-take-turn'
+
 #############################################
 # Initialization & Main Loop                #
 #############################################
@@ -823,6 +825,9 @@ def new_game():
 
     # player inventory
     inventory = []
+
+    # change game state to playing
+    game_state = 'playing'
 
     # print a welcome message!
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
