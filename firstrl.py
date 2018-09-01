@@ -28,6 +28,12 @@ MAX_ROOM_ITEMS = 2
 
 # spell values
 HEAL_AMOUNT = 10
+LIGHTNING_DAMAGE = 20
+LIGHTNING_RANGE = 5
+CONFUSE_NUM_TURNS = 10
+CONFUSE_RANGE = 8
+IMPACT_GRENADE_RADIUS = 3
+IMPACT_GRENADE_DAMAGE = 12
  
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
@@ -124,6 +130,10 @@ class Object:
         dy = other.y - self.y
         return math.sqrt(dx ** 2 + dy ** 2)
 
+    def distance(self, x, y):
+        # return to distance to some coordinates
+        return math.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
+
     # make this object be drawn first, so all others appear above it if they're in the same tile
     def send_to_back(self):
         global objects
@@ -192,6 +202,21 @@ class BasicMonster:
             # close enough, attack! (if the player is still alive)
             elif player.fighter.hp > 0:
                 monster.fighter.attack(player)
+
+# AI for a temporarily confused monster (reverts to previous AI after a while).
+class ConfusedMonster:
+    def __init__(self, old_ai, num_turns=CONFUSE_NUM_TURNS):
+        self.old_ai = old_ai
+        self.num_turns = num_turns
+
+    def take_turn(self):
+        if self.num_turns > 0: # monster still confused...
+            # move in a random direction, and decrease the number of turns confused
+            self.owner.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+            self.num_turns -= 1
+        else: # restore the previous AI (this one will be deleted because it's not referenced anymore)
+            self.owner.ai = self.old_ai
+            message('The ' + self.owner.name + ' is no longer confused!', libtcod.red)
 
 # an item that can be picked up and used
 class Item:
@@ -361,9 +386,21 @@ def place_objects(room):
 
         # only place it if the tile is NOT BLOCKED
         if not is_blocked(x, y):
-            # create a health pack
-            item_component = Item(use_function=cast_heal)
-            item = Object(x, y, '!', 'health pack', libtcod.violet, item=item_component)
+            dice = libtcod.random_get_int(0, 0, 100)
+            if dice < 70: # 70% chance for a health pack
+                # create a health pack
+                item_component = Item(use_function=cast_heal)
+                item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component)
+            elif dice < 70 + 10: # 10% chance for a lightning device
+                # create a lightning device
+                item_component = Item(use_function=cast_lightning)
+                item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component)
+            elif dice < 70 + 10 + 10: # 10% chance for an EMP device
+                item_component = Item(use_function=cast_confuse)
+                item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component)
+            else: # 10% chance for an impact grenade
+                item_component = Item(use_function=cast_impact_grenade)
+                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_yellow, item=item_component)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
@@ -575,6 +612,24 @@ def handle_keys():
 
             return 'didnt-take-turn'
 
+# return the position of a tile left-clicked in player's FOV (optionally in a range), or (None, None) if right-clicked
+def target_tile(max_range=None):
+    global key, mouse
+    while True:
+        # render the screen, this erases the inventory and shows the names of objects under the mouse
+        libtcod.console_flush()
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
+        render_all()
+
+        (x, y) = (mouse.cx, mouse.cy)
+
+        # accept the target if the player clicked in FOV, and in case a range is specified, if it's in that range
+        if (mouse.lbutton_pressed and libtcod.map_is_in_fov(fov_map, x, y) and (max_range is None or player.distance(x, y) <= max_range)):
+            return (x, y)
+
+        if mouse.rbutton_pressed or key.vk == libtcod.KEY_ESCAPE:
+            return (None, None) # cancel if the player right-clicked or hit Escape
+
 # ends game is player dies!
 def player_death(player):
     global game_state
@@ -647,6 +702,20 @@ def inventory_menu(header):
     if index is None or len(inventory) == 0: return None
     return inventory[index].item
 
+# finds closest enemy, up to a maximum range, and in the player's FOV
+def closest_monster(max_range):
+    closest_enemy = None
+    closest_dist = max_range + 1 #start with (slightly more than) maximum range
+
+    for object in objects:
+        if object.fighter and not object == player and libtcod.map_is_in_fov(fov_map, object.x, object.y):
+            # calculate dist between this object and player
+            dist = player.distance_to(object)
+            if dist < closest_dist: #it's closer, so remember it
+                closest_enemy = object
+                closest_dist = dist
+    return closest_enemy
+
 # heal the player
 def cast_heal():
     if player.fighter.hp == player.fighter.max_hp: # don't heal the player if at full hp already
@@ -655,6 +724,42 @@ def cast_heal():
 
     message('Your wounds start to feel better!', libtcod.light_violet)
     player.fighter.heal(HEAL_AMOUNT)
+
+# finds closest enemy (inside a maximum range) and damage it
+def cast_lightning():
+    monster = closest_monster(LIGHTNING_RANGE)
+    if monster is None: #no enemy found within max range
+        message('No enemy is close enough to strike.', libtcod.red)
+        return 'cancelled'
+
+    # zap it!
+    message('A lightning bolt strikes the ' + monster.name + ' with a loud thunder! The damage is ' + str(LIGHTNING_DAMAGE) + ' hit points.', libtcod.light_blue)
+    monster.fighter.take_damage(LIGHTNING_DAMAGE)
+
+# find closest enemy in-range and confuse it
+def cast_confuse():
+    monster = closest_monster(CONFUSE_RANGE)
+    if monster is None: #no enemy found within max range
+        message('No enemy is close enough to use EMP on.', libtcod.red)
+        return 'cancelled'
+
+    # replace the monster's AI with a "confused" one; after some turns it will restore the old AI
+    old_ai = monster.ai
+    monster.ai = ConfusedMonster(old_ai)
+    monster.ai.owner = monster #tell the new component who owns it
+    message('The ' + monster.name + ' starts to go haywire, stumbling around!', libtcod.light_green)
+
+# ask the player for a target tile to throw an impact grenade at
+def cast_impact_grenade():
+    message('Left-click a target tile to throw the impact grenade, or right-click to cancel.', libtcod.light_cyan)
+    (x, y) = target_tile()
+    if x is None: return 'cancelled'
+    message('The impact grenade explodes, burning everything within ' + str(IMPACT_GRENADE_RADIUS) + ' tiles!', libtcod.orange)
+
+    for obj in objects: # damage every fighter in range, including the player
+        if obj.distance(x, y) <= IMPACT_GRENADE_RADIUS and obj.fighter:
+            message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
+            obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
 #############################################
 # Initialization & Main Loop                #
