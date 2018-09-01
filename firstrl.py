@@ -387,16 +387,16 @@ def place_objects(room):
         # only place it if the tile is NOT BLOCKED
         if not is_blocked(x, y):
             dice = libtcod.random_get_int(0, 0, 100)
-            if dice < 70: # 70% chance for a health pack
+            if dice < 1: # 70% chance for a health pack
                 # create a health pack
                 item_component = Item(use_function=cast_heal)
                 item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component)
-            elif dice < 70 + 10: # 10% chance for a lightning device
+            elif dice < 2: # 10% chance for a lightning device
                 # create a lightning device
                 item_component = Item(use_function=cast_lightning)
                 item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component)
-            elif dice < 70 + 10 + 10: # 10% chance for an EMP device
-                item_component = Item(use_function=cast_confuse)
+            elif dice < 100: # 10% chance for an EMP device
+                item_component = Item(use_function=cast_EMP_device)
                 item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component)
             else: # 10% chance for an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
@@ -630,6 +630,18 @@ def target_tile(max_range=None):
         if mouse.rbutton_pressed or key.vk == libtcod.KEY_ESCAPE:
             return (None, None) # cancel if the player right-clicked or hit Escape
 
+# returns a clicked monster inside FOV up to a range, or None if right-clicked
+def target_monster(max_range=None):
+    while True:
+        (x, y) = target_tile(max_range)
+        if x is None: #player cancelled
+            return None
+
+        # return the first clicked monster, otherwise continue looping
+        for obj in objects:
+            if obj.x == x and obj.y == y and obj.fighter and obj != player:
+                return obj
+
 # ends game is player dies!
 def player_death(player):
     global game_state
@@ -737,17 +749,23 @@ def cast_lightning():
     monster.fighter.take_damage(LIGHTNING_DAMAGE)
 
 # find closest enemy in-range and confuse it
-def cast_confuse():
-    monster = closest_monster(CONFUSE_RANGE)
-    if monster is None: #no enemy found within max range
-        message('No enemy is close enough to use EMP on.', libtcod.red)
+def cast_EMP_device():
+    # confuse all monsters within a radius
+    monsters = []
+    for obj in objects:
+        if obj.distance(player.x, player.y) <= CONFUSE_RANGE and obj.fighter and obj != player:
+            monsters.append(obj)
+
+    if not monsters:
+        message('No enemies close enough to use EMP device on.', libtcod.red)
         return 'cancelled'
 
-    # replace the monster's AI with a "confused" one; after some turns it will restore the old AI
-    old_ai = monster.ai
-    monster.ai = ConfusedMonster(old_ai)
-    monster.ai.owner = monster #tell the new component who owns it
-    message('The ' + monster.name + ' starts to go haywire, stumbling around!', libtcod.light_green)
+    for monster in monsters:
+        # replace the monster's AI with a "confused" one; after some turns it will restore the old AI
+        old_ai = monster.ai
+        monster.ai = ConfusedMonster(old_ai)
+        monster.ai.owner = monster #tell the new component who owns it
+        message('The ' + monster.name + ' starts to go haywire, stumbling around!', libtcod.light_green)
 
 # ask the player for a target tile to throw an impact grenade at
 def cast_impact_grenade():
