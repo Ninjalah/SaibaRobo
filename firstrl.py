@@ -48,7 +48,6 @@ color_light_ground = libtcod.Color(200, 180, 50)
 
 fov_recompute = True
 game_state = 'playing'
-player_action = None
 
 #####################
 # CLASS DEFINITIONS #
@@ -287,7 +286,10 @@ def create_v_tunnel(y1, y2, x):
         map[x][y].block_sight = False
  
 def make_map():
-    global map, player
+    global map, objects
+
+    #the list of objects with those two
+    objects = [player]
  
     #fill map with "blocked" tiles
     map = [[ Tile(True)
@@ -796,66 +798,86 @@ def cast_impact_grenade():
 #############################################
 # Initialization & Main Loop                #
 #############################################
- 
-libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
-libtcod.sys_set_fps(LIMIT_FPS)
-con = libtcod.console_new(MAP_WIDTH, MAP_HEIGHT)
-panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
- 
-#create object representing the player
-fighter_component = Fighter(hp=30, defense=0, power=5, death_function=player_death)
-player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
- 
-#the list of objects with those two
-objects = [player]
- 
-#generate map (at this point it's not drawn to the screen)
-make_map()
 
-# create the list of game messages and their colors, starts empty
-game_msgs = []
+# INITIALIZE FOV MAP
+def initialize_fov():
+    global fov_recompute, fov_map
+    fov_recompute = True
 
-# player inventory
-inventory = []
+    #create the FOV map, according to the generated map
+    fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
+    for y in range(MAP_HEIGHT):
+        for x in range(MAP_WIDTH):
+            libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
 
-# print a welcome message!
-message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
- 
-#create the FOV map, according to the generated map
-fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
-for y in range(MAP_HEIGHT):
-    for x in range(MAP_WIDTH):
-        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
+# START A NEW GAME
+def new_game():
+    global player, inventory, game_msgs, game_state
 
-# set mouse/keyboard controls
-mouse = libtcod.Mouse()
-key = libtcod.Key()
+    #create object representing the player
+    fighter_component = Fighter(hp=30, defense=0, power=5, death_function=player_death)
+    player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
+    
+    #generate map (at this point it's not drawn to the screen)
+    make_map()
+
+    # initialize fov map
+    initialize_fov()
+
+    # create the list of game messages and their colors, starts empty
+    game_msgs = []
+
+    # player inventory
+    inventory = []
+
+    # print a welcome message!
+    message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
+
+# run the main game functions
+def play_game():
+    global key, mouse
+
+    player_action = None
+
+    # set mouse/keyboard controls
+    mouse = libtcod.Mouse()
+    key = libtcod.Key()
+    while not libtcod.console_is_window_closed():
+        # check for key/mouse input event
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
+    
+        #render the screen
+        render_all()
+    
+        libtcod.console_flush()
+    
+        #erase all objects at their old locations, before they move
+        for object in objects:
+            object.clear()
+    
+        #handle keys and exit game if needed
+        player_action = handle_keys()
+        if player_action == 'exit':
+            break
+
+        # let monsters take their turn
+        if game_state == 'playing' and player_action != 'didnt-take-turn':
+            for object in objects:
+                if object.ai:
+                    object.ai.take_turn()
 
 #############
 # MAIN LOOP #
 #############
 
-while not libtcod.console_is_window_closed():
-    # check for key/mouse input event
-    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
- 
-    #render the screen
-    render_all()
- 
-    libtcod.console_flush()
- 
-    #erase all objects at their old locations, before they move
-    for object in objects:
-        object.clear()
- 
-    #handle keys and exit game if needed
-    player_action = handle_keys()
-    if player_action == 'exit':
-        break
+libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
+libtcod.sys_set_fps(LIMIT_FPS)
+con = libtcod.console_new(MAP_WIDTH, MAP_HEIGHT)
+panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
 
-    # let monsters take their turn
-    if game_state == 'playing' and player_action != 'didnt-take-turn':
-        for object in objects:
-            if object.ai:
-                object.ai.take_turn()
+# start new_game
+new_game()
+
+# begin playing game
+play_game()
