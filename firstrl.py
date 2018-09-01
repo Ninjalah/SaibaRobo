@@ -387,15 +387,15 @@ def place_objects(room):
         # only place it if the tile is NOT BLOCKED
         if not is_blocked(x, y):
             dice = libtcod.random_get_int(0, 0, 100)
-            if dice < 1: # 70% chance for a health pack
+            if dice < 70: # 70% chance for a health pack
                 # create a health pack
                 item_component = Item(use_function=cast_heal)
                 item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component)
-            elif dice < 2: # 10% chance for a lightning device
+            elif dice < 70 + 10: # 10% chance for a lightning device
                 # create a lightning device
                 item_component = Item(use_function=cast_lightning)
                 item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component)
-            elif dice < 100: # 10% chance for an EMP device
+            elif dice < 70 + 10 + 10: # 10% chance for an EMP device
                 item_component = Item(use_function=cast_EMP_device)
                 item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component)
             else: # 10% chance for an impact grenade
