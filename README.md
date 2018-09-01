@@ -1,9 +1,13 @@
 # SaibaRobo
 Description: Cyberpunk Roguelike Action
 
-**Current tutorial progress**: At "The message log": http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_python%2Blibtcod,_part_7
+**Current tutorial progress**: At "Dungeon levels and character progression": http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_python%2Blibtcod,_part_11
 
 **Add mouse support for main menu**: Instructions here: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Mouse-driven_Menus
+
+**Change pathfinding to allow monsters to walk diagonally/around other monsters**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#A.2A_Pathfinding
+
+**Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
 
 ## Player
 ### Stats
