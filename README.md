@@ -28,6 +28,17 @@ General section for weapons used by the player character (and some monsters).
 
 * **Pistol**: Basic semi-automatic pistol. Does minimal damage, has average crit chance, uses bullets.
 
+### Items
+General section for items used by the player character (and some monsters).
+
+* **Health pack**: Basic healing item, heals player for 10 points of HP.
+
+* **Mechanic**: Allow items to be thrown in a straight line from the player to target tile. Can allow for interesting strategies:
+  * **Health Pack**: Throw a health pack at a damaged (humanoid) enemy, the enemy attempts to pick up and use health pack (burning a few turns in the process), allowing Player to effectively "stun" the enemy at risk of taking too long, after which the enemy would use said Health Pack. Alternatively, enemy takes one turn to pick up Health Pack and one turn to use Health Pack, and it is up to the Player to "bait" the enemy by throwing the Health Pack far enough away from the enemy.
+    * Does this mean that enemies need their own FoV?
+  
+  * **Battery Pack**: Idea for energy weapon ammo. If thrown, has a percentage chance of causing an explosion for moderate damage to a few tile radius around it.
+
 ## Monsters
 Cyborg
 * **AI**: Feels fear, and if critically damaged, runs away from the player (at a reduced speed to allow players to catch up with them). Runs away from player FoV, and if not seen, hides in hidable locations, such as lockers (this can be punctuated with a sound or console text, ex: "You hear the sound of a metal door closing!")
