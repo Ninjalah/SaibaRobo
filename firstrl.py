@@ -433,7 +433,6 @@ def place_objects(room):
         x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
         y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
 
-        # chances: 5% monster A, 25% monster B, 70% monster C, etc.
         # alternatively, can create more chances and create squads of monsters
         # only place object if tile is not blocked
         if not is_blocked(x, y):
@@ -467,11 +466,11 @@ def place_objects(room):
             if choice == 'heal':
                 # create a health pack
                 item_component = Item(use_function=cast_heal)
-                item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component, always_visible=True)
+                item = Object(x, y, '+', 'Health Pack', libtcod.violet, item=item_component, always_visible=True)
             elif choice == 'lightning':
                 # create a lightning device
                 item_component = Item(use_function=cast_lightning)
-                item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component, always_visible=True)
+                item = Object(x, y, '#', 'Lightning Device', libtcod.light_blue, item=item_component, always_visible=True)
             elif choice == 'emp':
                 # create an emp device
                 item_component = Item(use_function=cast_EMP_device)
@@ -479,7 +478,7 @@ def place_objects(room):
             elif choice == 'impact_grenade':
                 # create an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
-                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_yellow, item=item_component, always_visible=True)
+                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
