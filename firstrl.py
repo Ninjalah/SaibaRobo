@@ -374,6 +374,18 @@ class Equipment:
         self.is_equipped = False
         message('Unequipped ' + self.owner.name + ' from ' + self.slot + '.', libtcod.light_yellow)
 
+    def cast_shoot(self):
+        if self.is_ranged == True:
+            message('Left-click a target tile to shoot, or right-click to cancel.', libtcod.light_cyan)
+            (x, y) = target_tile()
+            if x is None: return 'cancelled'
+
+            for obj in objects: # damage fighter at target_tile()
+                if (obj.x, obj.y) == (x, y) and obj.fighter:
+                    message('The ' + obj.name + ' is shot for ' + str(player.fighter.power) + ' hit points.', libtcod.orange)
+                    obj.fighter.take_damage(player.fighter.power)
+
+
 ########################
 # FUNCTION DEFINITIONS #
 ########################
@@ -1073,6 +1085,11 @@ def handle_keys():
                     if object.x == player.x and object.y == player.y and object.item:
                         object.item.pick_up()
                         break
+
+            # use equipment; if ranged, call shoot() function
+            if key_char == 'f':
+                if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
+                    get_equipped_in_slot('right hand').cast_shoot()
 
             if key_char == 'i':
                 # show the inventory; if an item is selected, use it
