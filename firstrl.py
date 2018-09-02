@@ -596,6 +596,8 @@ def monster_death(monster):
 
 # define a menu window. Has a string at the top (header), list of strings (options. can be names of items, for ex), and the window's width (width)
 def menu(header, options, width):
+    global key, mouse
+
     if len(options) > 26: raise ValueError('Cannot have a menu with more than 26 options.')
 
     # calculate total height for the header (after auto-wrap) and one line per option
@@ -625,17 +627,32 @@ def menu(header, options, width):
     y = SCREEN_HEIGHT/2 - height/2
     libtcod.console_blit(window, 0, 0, width, height, 0, x, y, 1.0, 0.7)
 
-    # present the root console to the player and wait for a key-press
-    libtcod.console_flush()
-    key = libtcod.console_wait_for_keypress(True)
+    # compute x and y offsets to convert console position to menu position
+    x_offset = x #x is the left edge of the menu
+    y_offset = y + header_height #subtract the height of the header from the top edge of the menu
 
-    if key.vk == libtcod.KEY_ENTER and key.ralt:    #Alt+Enter: toggle fullscreen
-        libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+    while True:
+        # present the root console to the player and wait for a key-press
+        libtcod.console_flush()
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
 
-    # convert the ASCII code to an index; if it corresponds to an option, return it
-    index = key.c - ord('a')
-    if index >= 0 and index < len(options): return index
-    return None
+        if (mouse.lbutton_pressed):
+            (menu_x, menu_y) = (mouse.cx - x_offset, mouse.cy - y_offset)
+            # check if click is within the menu and on a choice
+            if menu_x >= 0 and menu_x < width and menu_y >= 0 and menu_y < height - header_height:
+                return menu_y
+
+        if mouse.rbutton_pressed or key.vk == libtcod.KEY_ESCAPE:
+            return None #cancel if the player right-clicked or pressed Escape
+
+        if key.vk == libtcod.KEY_ENTER and key.ralt:    #Alt+Enter: toggle fullscreen
+            libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+
+        # convert the ASCII code to an index; if it corresponds to an option, return it
+        index = key.c - ord('a')
+        if index >= 0 and index < len(options): return index
+        # if they pressed a letter that is not an option, return None
+        if index >= 0 and index <= 26: return None
 
 # show a menu with each item of the inventory as an option
 def inventory_menu(header):
@@ -884,9 +901,6 @@ def play_game():
 
     player_action = None
 
-    # set mouse/keyboard controls
-    mouse = libtcod.Mouse()
-    key = libtcod.Key()
     while not libtcod.console_is_window_closed():
         # check for key/mouse input event
         libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
@@ -950,6 +964,10 @@ libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial'
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(MAP_WIDTH, MAP_HEIGHT)
 panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
+
+# set mouse/keyboard controls
+mouse = libtcod.Mouse()
+key = libtcod.Key()
 
 # open the main menu
 main_menu()
