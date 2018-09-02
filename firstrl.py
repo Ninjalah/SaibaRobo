@@ -91,7 +91,7 @@ class Rect:
 class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
-    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None):
+    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None):
         self.x = x
         self.y = y
         self.char = char
@@ -109,6 +109,14 @@ class Object:
 
         self.item = item
         if self.item: # let the Item component know who owns it
+            self.item.owner = self
+
+        self.equipment = equipment
+        if self.equipment: #let the Equipment component know who owns it
+            self.equipment.owner = self
+
+            # there must be an Item component for the Equipment component to work properly
+            self.item = Item()
             self.item.owner = self
  
     def move(self, dx, dy):
@@ -241,7 +249,16 @@ class Item:
             objects.remove(self.owner)
             message('You picked up a ' + self.owner.name + '!', libtcod.green)
 
+            # special case: automatically equip, if the corresponding equipment slot is unused
+            equipment = self.owner.equipment
+            if equipment and get_equipped_in_slot(equipment.slot) is None:
+                equipment.equip()
+
     def drop(self):
+        # special case: if the object has the Equipment component, dequip it before dropping
+        if self.owner.equipment:
+            self.owner.equipment.dequip()
+
         # add to the map and remove from the player's inventory. also, place it at the player's coordinates
         objects.append(self.owner)
         inventory.remove(self.owner)
@@ -250,12 +267,45 @@ class Item:
         message('You dropped a ' + self.owner.name + '.', libtcod.yellow)
 
     def use(self):
+        # special case: if the object has the Equipment component, the "use" action is to equip/dequip
+        if self.owner.equipment:
+            self.owner.equipment.toggle_equip()
+            return
+
         # just call the "use_function" if it is defined
         if self.use_function is None:
             message('The ' + self.owner.name + ' cannot be used.')
         else:
             if self.use_function() != 'cancelled':
                 inventory.remove(self.owner) # destroy after use, unless it was cancelled for some reason
+
+# an object that can be equipped, yielding bonuses. Automatically adds the Item component
+class Equipment:
+    def __init__(self, slot):
+        self.slot = slot
+        self.is_equipped = False
+
+    def toggle_equip(self): # toggle equip status
+        if self.is_equipped:
+            self.dequip()
+        else:
+            self.equip()
+
+    def equip(self):
+        # if the slot is already being used, dequip whatever is there first
+        old_equipment = get_equipped_in_slot(self.slot)
+        if old_equipment is not None:
+            old_equipment.dequip()
+
+        # equip object and show a message about it
+        self.is_equipped = True
+        message('Equipped ' + self.owner.name + ' on ' + self.slot + '.', libtcod.light_green)
+
+    def dequip(self):
+        # dequip object and show a message about it
+        if not self.is_equipped: return
+        self.is_equipped = False
+        message('Unequipped ' + self.owner.name + ' from ' + self.slot + '.', libtcod.light_yellow)
 
 ########################
 # FUNCTION DEFINITIONS #
@@ -444,6 +494,7 @@ def place_objects(room):
     item_chances['lightning'] = from_dungeon_level([[5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
+    item_chances['dagger'] = 15
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -499,6 +550,10 @@ def place_objects(room):
                 # create an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True)
+            elif choice == 'dagger':
+                # create an energy dagger
+                equipment_component = Equipment(slot='right hand')
+                item = Object(x, y, '/', 'Dagger', libtcod.green, equipment=equipment_component)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
@@ -688,6 +743,13 @@ def check_level_up():
         elif choice == 2:
             player.fighter.defense += 1
 
+# returns the equipment in a slot, or None if it's empty
+def get_equipped_in_slot(slot):
+    for obj in inventory:
+        if obj.equipment and obj.equipment.slot == slot and obj.equipment.is_equipped:
+            return obj.equipment
+    return None
+
 # ends game is player dies!
 def player_death(player):
     global game_state
@@ -777,7 +839,13 @@ def inventory_menu(header):
         options = ['Inventory is empty.']
     else:
         inventory.sort(key=lambda k: k.name, reverse=False)
-        options = [item.name for item in inventory]
+        options = []
+        for item in inventory:
+            text = item.name
+            # show additional information, in case it's equipped
+            if item.equipment and item.equipment.is_equipped:
+                text = text + ' (on ' + item.equipment.slot + ')'
+            options.append(text)
 
     index = menu(header, options, INVENTORY_WIDTH)
 

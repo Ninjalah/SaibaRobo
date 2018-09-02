@@ -39,7 +39,11 @@ Terminatron: A large, hulking robot that mercilessly pursues interlopers. Massiv
 ### Weapons
 General section for weapons used by the player character (and some monsters).
 
+* **Fists**: The player's fists. Does superficial damage, melee-only, available from the start.
+
 * **Pistol**: Basic semi-automatic pistol. Does minimal damage, has average crit chance, uses bullets.
+
+* **Dagger**: A weak energy dagger. Does minimal damage, melee-only.
 
 ### Items
 General section for items used by the player character (and some monsters).
