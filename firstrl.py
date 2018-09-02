@@ -458,7 +458,7 @@ def get_names_under_mouse():
 
     # create a list with the names of all objects at the mouse's coordinates and in FOV
     names = [obj.name for obj in objects
-        if obj.x == x and obj.y == y and libtcod.map_is_in_fov(fov_map, obj.x, obj.y)]
+        if obj.x == x and obj.y == y and (libtcod.map_is_in_fov(fov_map, obj.x, obj.y) or (map[x][y].explored and obj.always_visible))]
 
     names = ', '.join(names) # join the names separated by commas
     return names.capitalize()
