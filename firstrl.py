@@ -332,6 +332,7 @@ class Item:
     def use(self):
         # special case: if the object has the Equipment component, the "use" action is to equip/dequip
         if self.owner.equipment:
+            # TODO: Maybe this is where pistol bug occurs? As the pistol doesn't have a "use_function" currently
             self.owner.equipment.toggle_equip()
             return
 
@@ -344,13 +345,15 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, max_ammo=0, ammo=0, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
         self.power_bonus = power_bonus
         self.defense_bonus = defense_bonus
         self.max_hp_bonus = max_hp_bonus
         self.is_equipped = False
         self.is_ranged = is_ranged
+        self.max_ammo = ammo
+        self.ammo = ammo
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -383,8 +386,24 @@ class Equipment:
             for obj in objects: # damage fighter at target_tile()
                 if (obj.x, obj.y) == (x, y) and obj.fighter:
                     message('The ' + obj.name + ' is shot for ' + str(player.fighter.power) + ' hit points.', libtcod.orange)
-                    obj.fighter.take_damage(player.fighter.power)
+                    if self.ammo > 0:
+                        self.ammo -= 1
+                        obj.fighter.take_damage(player.fighter.power)
+                    else:
+                        message('Your ' + self.owner.name + ' is empty!', libtcod.orange)
 
+    def reload(self):
+        print('Attempting to reload ' + self.owner.name + '... Ammo: ' + str(self.ammo) + ' max_ammo: ' + str(self.max_ammo) + ' is_ranged: ' + str(self.is_ranged) + ' contains 10mm?: ' + str(inventory.__contains__('10mm_ammo')))
+        if self.is_ranged == True and self.ammo < self.max_ammo:
+            print('Slot is ' + self.slot)
+            print('All items equipped: ' + str(get_all_equipped(player.fighter)))
+            print('Equipped in right hand: ' + get_equipped_in_slot('right hand'))
+            message('You reload ' + get_equipped_in_slot('right hand') + '!', libtcod.orange)
+            equipped = get_equipped_in_slot(self.slot)
+            equipped.ammo += equipped.max_ammo - equipped.ammo
+            inventory.remove("10mm_ammo")
+        else:
+            message('Nothing to reload!', libtcod.red)
 
 ########################
 # FUNCTION DEFINITIONS #
@@ -569,12 +588,13 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['heal'] = from_dungeon_level([[70, 1]])
+    item_chances['heal'] = from_dungeon_level([[55, 1]])
     item_chances['lightning'] = from_dungeon_level([[0, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[0, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[10, 1]])
+    item_chances['10mm_ammo'] = from_dungeon_level([[15, 1]])
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -636,8 +656,12 @@ def place_objects(room):
                 item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component)
             elif choice == 'pistol':
                 # create a standard pistol
-                equipment_component = Equipment(slot='right hand', is_ranged=True, power_bonus=PISTOL_DAMAGE)
+                equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, power_bonus=PISTOL_DAMAGE)
                 item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component)
+            elif choice == '10mm_ammo':
+                # create a 10mm_ammo
+                item_component = Item()
+                item = Object(x, y, '"', '10mm_ammo', libtcod.gray, item=item_component, always_visible=True)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
@@ -829,7 +853,9 @@ def check_level_up():
 
 # returns the equipment in a slot, or None if it's empty
 def get_equipped_in_slot(slot):
+    print('Entering get_equipped_in_slot...')
     for obj in inventory:
+        print('In get_equipped_in_slot, obj is ' + obj.name)
         if obj.equipment and obj.equipment.slot == slot and obj.equipment.is_equipped:
             return obj.equipment
     return None
@@ -1104,6 +1130,11 @@ def handle_keys():
                     '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
                     '\nAttack: ' + str(player.fighter.power) + '\nDefense: ' + str(player.fighter.defense), CHARACTER_SCREEN_WIDTH)
 
+            if key_char == 'r':
+                # reload current weapon
+                if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
+                    get_equipped_in_slot('right hand').reload()
+
             if key_char == '.' and key.shift:
                 # go down the stairs, if the player is on them
                 if stairs.x == player.x and stairs.y == player.y:
@@ -1154,7 +1185,7 @@ def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level
 
     #create object representing the player
-    fighter_component = Fighter(hp=30, defense=0, power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=10000, defense=0, power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
 
     player.level = 1
