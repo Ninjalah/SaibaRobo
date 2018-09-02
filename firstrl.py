@@ -26,8 +26,6 @@ CHARACTER_SCREEN_WIDTH = 30
 ROOM_MAX_SIZE = 10
 ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
-MAX_ROOM_MONSTERS = 3
-MAX_ROOM_ITEMS = 2
 
 # Experience and level-ups
 LEVEL_UP_BASE = 200
@@ -398,9 +396,37 @@ def random_choice(chances_dict):
 
     return strings[random_choice_index(chances)]
 
+# returns a value that depends on level. the table specifies what value occurs after each level, default is 0
+def from_dungeon_level(table):
+    for (value, level) in reversed(table):
+        if dungeon_level >= level:
+            return value
+    return 0
+
 def place_objects(room):
+    # this is where we decide the chance of each monster or item appearing
+
+    # max number of monsters per room
+    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
+
+    # chance of each mosnter
+    monster_chances = {}
+    monster_chances['cyborg'] = 70
+    monster_chances['mecharachnid'] = from_dungeon_level([[15, 1], [30, 3], [60, 5]])
+    monster_chances['terminatron'] = from_dungeon_level([[5, 1], [10, 3], [20, 5]])
+
+    # maximum number of items per room
+    max_items = from_dungeon_level([[1, 1], [2, 4]])
+
+    # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
+    item_chances = {}
+    item_chances['heal'] = 35 # health pack always shows up, even if all other items have 0 chance
+    item_chances['lightning'] = from_dungeon_level([[25, 4]])
+    item_chances['impact_grenade'] = from_dungeon_level([[25, 6]])
+    item_chances['emp'] = from_dungeon_level([[10, 2]])
+
     # choose random number of monsters
-    num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
+    num_monsters = libtcod.random_get_int(0, 0, max_monsters)
 
     for i in range(num_monsters):
         # choose random spot for this monster
@@ -420,7 +446,7 @@ def place_objects(room):
                 fighter_component = Fighter(hp=15, defense=1, power=4, xp=100, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component)
-            else:
+            elif choice == 'cyborg':
                 fighter_component = Fighter(hp=10, defense=0, power=2, xp=35, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component)
@@ -428,7 +454,7 @@ def place_objects(room):
             objects.append(monster)
 
     # choose random number of items
-    num_items = libtcod.random_get_int(0, 0, MAX_ROOM_ITEMS)
+    num_items = libtcod.random_get_int(0, 0, max_items)
 
     for i in range(num_items):
         # choose random spot for this item
@@ -450,7 +476,7 @@ def place_objects(room):
                 # create an emp device
                 item_component = Item(use_function=cast_EMP_device)
                 item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True)
-            else:
+            elif choice == 'impact_grenade':
                 # create an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_yellow, item=item_component, always_visible=True)
