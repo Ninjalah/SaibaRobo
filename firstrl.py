@@ -39,6 +39,9 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
+FISTS_DAMAGE = 0
+PISTOL_DAMAGE = 5
+DAGGER_DAMAGE = 3
  
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
@@ -297,12 +300,13 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
         self.power_bonus = power_bonus
         self.defense_bonus = defense_bonus
         self.max_hp_bonus = max_hp_bonus
         self.is_equipped = False
+        self.is_ranged = is_ranged
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -509,11 +513,12 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['heal'] = 35 # health pack always shows up, even if all other items have 0 chance
-    item_chances['lightning'] = from_dungeon_level([[5, 4]])
-    item_chances['impact_grenade'] = from_dungeon_level([[5, 6]])
+    item_chances['heal'] = from_dungeon_level([[70, 1]])
+    item_chances['lightning'] = from_dungeon_level([[0, 1], [5, 4]])
+    item_chances['impact_grenade'] = from_dungeon_level([[0, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
-    item_chances['dagger'] = 15
+    item_chances['dagger'] = from_dungeon_level([[15, 1]])
+    item_chances['pistol'] = from_dungeon_level([[10, 1]])
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -571,8 +576,12 @@ def place_objects(room):
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True)
             elif choice == 'dagger':
                 # create an energy dagger
-                equipment_component = Equipment(slot='right hand', power_bonus=3)
-                item = Object(x, y, '/', 'Dagger', libtcod.green, equipment=equipment_component)
+                equipment_component = Equipment(slot='right hand', is_ranged=False, power_bonus=DAGGER_DAMAGE)
+                item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component)
+            elif choice == 'pistol':
+                # create a standard pistol
+                equipment_component = Equipment(slot='right hand', is_ranged=True, power_bonus=PISTOL_DAMAGE)
+                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
@@ -1109,6 +1118,13 @@ def new_game():
 
     # print a welcome message!
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
+
+    # # initial equipment: a dagger
+    # equipment_component = Equipment(slot='right hand', is_ranged=False, power_bonus=DAGGER_DAMAGE)
+    # obj = Object(0, 0, 'i', 'Dagger', libtcod.green, equipment=equipment_component)
+    # inventory.append(obj)
+    # equipment_component.equip()
+    # obj.always_visible = True
 
 # advance to the next level
 def next_level():
