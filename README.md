@@ -43,12 +43,12 @@ General section for weapons used by the player character (and some monsters).
 
 * **Pistol**: Basic semi-automatic pistol. Does minimal damage, has average crit chance, uses bullets.
 
-* **Dagger**: A weak energy dagger. Does minimal damage, melee-only.
+* **Dagger**: A weak energy dagger. Does minimal damage, melee-only. **COMPLETED**
 
 ### Items
 General section for items used by the player character (and some monsters).
 
-* **Health pack**: Basic healing item, heals player for 10 points of HP.
+* **Health pack**: Basic healing item, heals player for 10 points of HP. **COMPLETED**
 
 * **Mechanic**: Allow items to be thrown in a straight line from the player to target tile. Can allow for interesting strategies:
   * **Health Pack**: Throw a health pack at a damaged (humanoid) enemy, the enemy attempts to pick up and use health pack (burning a few turns in the process), allowing Player to effectively "stun" the enemy at risk of taking too long, after which the enemy would use said Health Pack. Alternatively, enemy takes one turn to pick up Health Pack and one turn to use Health Pack, and it is up to the Player to "bait" the enemy by throwing the Health Pack far enough away from the enemy.
@@ -64,7 +64,8 @@ General section for items used by the player character (and some monsters).
     * **Impact Grenade**: A grenade that immediately explodes on impact, damaging all monsters (including the player) nearby.
 
 * **Weapon Modifications**: Modify weapons to give certain specific advantages, etc.
-  * **Flashlight**: Can be attached to any weapon, increases Player's FOV while wielding that weapon.
+  * **Flashlight**: Can be wielded in the left hand, increases Player's FOV while equipped.
+  * **Attachable Flashlight**: Can be attached to a weapon, increases Player's FOV while equipped.
 
 ## Monsters
 ### Mechanics

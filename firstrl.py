@@ -167,12 +167,28 @@ class Object:
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
     def __init__(self, hp, defense, power, xp, death_function=None):
-        self.max_hp = hp
+        self.base_max_hp = hp
         self.hp = hp
-        self.defense = defense
-        self.power = power
+        self.base_defense = defense
+        self.base_power = power
         self.xp = xp
         self.death_function = death_function
+
+    # return actual power, by summing up the bonuses from all equipped items
+    @property
+    def power(self):
+        bonus = sum(equipment.power_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_power + bonus
+
+    @property
+    def defense(self):
+        bonus = sum(equipment.defense_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_defense + bonus
+
+    @property
+    def max_hp(self):
+        bonus = sum(equipment.max_hp_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_max_hp + bonus
 
     # a simple formula for attack damage
     def attack(self, target):
@@ -202,8 +218,8 @@ class Fighter:
     # heal by the given amount, without going over maximum
     def heal(self, amount):
         self.hp += amount
-        if self.hp > self.max_hp:
-            self.hp = self.max_hp
+        if self.hp > self.base_max_hp:
+            self.hp = self.base_max_hp
 
 # AI for basic monsters
 class BasicMonster:
@@ -281,8 +297,11 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot):
+    def __init__(self, slot, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
+        self.power_bonus = power_bonus
+        self.defense_bonus = defense_bonus
+        self.max_hp_bonus = max_hp_bonus
         self.is_equipped = False
 
     def toggle_equip(self): # toggle equip status
@@ -552,7 +571,7 @@ def place_objects(room):
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True)
             elif choice == 'dagger':
                 # create an energy dagger
-                equipment_component = Equipment(slot='right hand')
+                equipment_component = Equipment(slot='right hand', power_bonus=3)
                 item = Object(x, y, '/', 'Dagger', libtcod.green, equipment=equipment_component)
 
             objects.append(item)
@@ -643,7 +662,7 @@ def render_all():
         y += 1
 
     # show the player's stats
-    render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp, libtcod.light_red, libtcod.darker_red)
+    render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.base_max_hp, libtcod.light_red, libtcod.darker_red)
 
     # display dungeon level to GUI
     libtcod.console_print_ex(panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
@@ -731,17 +750,17 @@ def check_level_up():
         choice = None
         while choice == None: # keep asking until a choice is made
             choice = menu('Level up! Choose a stat to raise:\n',
-                ['Health (+20 HP, from ' + str(player.fighter.max_hp) + ')',
-                'Attack (+1 attack, from ' + str(player.fighter.power) + ')',
-                'Defense (+1 defense, from ' + str(player.fighter.defense) + ')'], LEVEL_SCREEN_WIDTH)
+                ['Health (+20 HP, from ' + str(player.fighter.base_max_hp) + ')',
+                'Attack (+1 attack, from ' + str(player.fighter.base_power) + ')',
+                'Defense (+1 defense, from ' + str(player.fighter.base_defense) + ')'], LEVEL_SCREEN_WIDTH)
 
         if choice == 0:
-            player.fighter.max_hp += 20
+            player.fighter.base_max_hp += 20
             player.fighter.hp += 20
         elif choice == 1:
-            player.fighter.power += 1
+            player.fighter.base_power += 1
         elif choice == 2:
-            player.fighter.defense += 1
+            player.fighter.base_defense += 1
 
 # returns the equipment in a slot, or None if it's empty
 def get_equipped_in_slot(slot):
@@ -749,6 +768,17 @@ def get_equipped_in_slot(slot):
         if obj.equipment and obj.equipment.slot == slot and obj.equipment.is_equipped:
             return obj.equipment
     return None
+
+# returns a list of equipped items
+def get_all_equipped(obj):
+    if obj == player:
+        equipped_list = []
+        for item in inventory:
+            if item.equipment and item.equipment.is_equipped:
+                equipped_list.append(item.equipment)
+        return equipped_list
+    else:
+        return [] # other objects have no equipment
 
 # ends game is player dies!
 def player_death(player):
@@ -869,7 +899,7 @@ def closest_monster(max_range):
 
 # heal the player
 def cast_heal():
-    if player.fighter.hp == player.fighter.max_hp: # don't heal the player if at full hp already
+    if player.fighter.hp == player.fighter.base_max_hp: # don't heal the player if at full hp already
         message('You are already at full health.', libtcod.red)
         return 'cancelled'
 
@@ -1054,7 +1084,7 @@ def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level
 
     #create object representing the player
-    fighter_component = Fighter(hp=30, defense=0, power=5, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=30, defense=0, power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
 
     player.level = 1
@@ -1085,7 +1115,7 @@ def next_level():
     global dungeon_level
     # heal the player by 50%
     message('You take a moment to rest, and recover your strength.', libtcod.light_violet)
-    player.fighter.heal(player.fighter.max_hp / 2)
+    player.fighter.heal(player.fighter.base_max_hp / 2)
 
     dungeon_level += 1
     message('After a rare moment of peace, you descend deeper into the facility...', libtcod.red)
