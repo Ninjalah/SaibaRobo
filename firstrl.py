@@ -776,7 +776,7 @@ def inventory_menu(header):
     if len(inventory) == 0:
         options = ['Inventory is empty.']
     else:
-        inventory = sorted(inventory, key=lambda k: k.name, reverse=True)
+        inventory.sort(key=lambda k: k.name, reverse=False)
         options = [item.name for item in inventory]
 
     index = menu(header, options, INVENTORY_WIDTH)
