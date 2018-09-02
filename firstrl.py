@@ -433,7 +433,7 @@ def place_objects(room):
     monster_chances = {}
     monster_chances['cyborg'] = 70
     monster_chances['mecharachnid'] = from_dungeon_level([[10, 1], [25, 3], [50, 5]])
-    monster_chances['terminatron'] = from_dungeon_level([[5, 1], [10, 3], [15, 5]])
+    monster_chances['terminatron'] = from_dungeon_level([[3, 1], [5, 3], [8, 5]])
 
     # maximum number of items per room
     max_items = from_dungeon_level([[1, 1], [2, 4]])
