@@ -41,6 +41,10 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
+
+# RNG chances
+monster_chances = {'cyborg': 80, 'mecharachnid': 15, 'terminatron': 5}
+item_chances = {'heal': 70, 'lightning': 10, 'impact_grenade': 10, 'emp': 10}
  
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
@@ -371,6 +375,29 @@ def make_map():
     objects.append(stairs)
     stairs.send_to_back() #so it's drawn below the monsters
 
+# choose one option from list of chances, returning its index
+def random_choice_index(chances):
+    # the dice will land on some number between 1 and the sum of chances
+    dice = libtcod.random_get_int(0, 1, sum(chances))
+
+    # go through all chances, keeping the sum so far
+    running_sum = 0
+    choice = 0
+    for w in chances:
+        running_sum += w
+
+        # see if the dice landed in the part that corresponds to this choice
+        if dice <= running_sum:
+            return choice
+        choice += 1
+
+# choose one option from dictionary of chances, returning its key
+def random_choice(chances_dict):
+    chances = chances_dict.values()
+    strings = chances_dict.keys()
+
+    return strings[random_choice_index(chances)]
+
 def place_objects(room):
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
@@ -384,19 +411,16 @@ def place_objects(room):
         # alternatively, can create more chances and create squads of monsters
         # only place object if tile is not blocked
         if not is_blocked(x, y):
-            choice = libtcod.random_get_int(0, 0, 100)
-            if choice < 5:
-                # 5% create Terminatron
+            choice = random_choice(monster_chances)
+            if choice == 'terminatron':
                 fighter_component = Fighter(hp=100, defense=5, power=10, xp=10000, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component)
-            elif choice < 5 + 25:
-                # 25% create Mecharachnid
+            elif choice == 'mecharachnid':
                 fighter_component = Fighter(hp=15, defense=1, power=4, xp=100, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component)
             else:
-                # 70% create Cyborg
                 fighter_component = Fighter(hp=10, defense=0, power=2, xp=35, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component)
@@ -413,19 +437,21 @@ def place_objects(room):
 
         # only place it if the tile is NOT BLOCKED
         if not is_blocked(x, y):
-            dice = libtcod.random_get_int(0, 0, 100)
-            if dice < 70: # 70% chance for a health pack
+            choice = random_choice(item_chances)
+            if choice == 'heal':
                 # create a health pack
                 item_component = Item(use_function=cast_heal)
                 item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component, always_visible=True)
-            elif dice < 70 + 10: # 10% chance for a lightning device
+            elif choice == 'lightning':
                 # create a lightning device
                 item_component = Item(use_function=cast_lightning)
                 item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component, always_visible=True)
-            elif dice < 70 + 10 + 10: # 10% chance for an EMP device
+            elif choice == 'emp':
+                # create an emp device
                 item_component = Item(use_function=cast_EMP_device)
                 item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True)
-            else: # 10% chance for an impact grenade
+            else:
+                # create an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_yellow, item=item_component, always_visible=True)
 
