@@ -87,13 +87,14 @@ class Rect:
 class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
-    def __init__(self, x, y, char, name, color, blocks=False, fighter=None, ai=None, item=None):
+    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None):
         self.x = x
         self.y = y
         self.char = char
         self.color = color
         self.name = name
         self.blocks = blocks
+        self.always_visible = always_visible
         self.fighter = fighter
         if self.fighter: #let the fighter component know who owns it
             self.fighter.owner = self
@@ -141,8 +142,8 @@ class Object:
         objects.insert(0, self)
  
     def draw(self):
-        #only show if it's visible to the player
-        if libtcod.map_is_in_fov(fov_map, self.x, self.y):
+        #only show if it's visible to the player OR if it's explored and always_visible = True
+        if (libtcod.map_is_in_fov(fov_map, self.x, self.y) or (self.always_visible and map[self.x][self.y].explored)):
             #set the color and then draw the character that represents this object at its position
             libtcod.console_set_default_foreground(con, self.color)
             libtcod.console_put_char(con, self.x, self.y, self.char, libtcod.BKGND_NONE)
@@ -287,7 +288,7 @@ def create_v_tunnel(y1, y2, x):
         map[x][y].block_sight = False
  
 def make_map():
-    global map, objects
+    global map, objects, stairs
 
     #the list of objects with those two
     objects = [player]
@@ -355,6 +356,11 @@ def make_map():
             rooms.append(new_room)
             num_rooms += 1
 
+    # create stairs at the center of the last room
+    stairs = Object(new_x, new_y, '>', 'stairs', libtcod.white, always_visible=True)
+    objects.append(stairs)
+    stairs.send_to_back() #so it's drawn below the monsters
+
 def place_objects(room):
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
@@ -401,17 +407,17 @@ def place_objects(room):
             if dice < 70: # 70% chance for a health pack
                 # create a health pack
                 item_component = Item(use_function=cast_heal)
-                item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component)
+                item = Object(x, y, '!', 'Health Pack', libtcod.violet, item=item_component, always_visible=True)
             elif dice < 70 + 10: # 10% chance for a lightning device
                 # create a lightning device
                 item_component = Item(use_function=cast_lightning)
-                item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component)
+                item = Object(x, y, '#', 'Lightning Device', libtcod.light_yellow, item=item_component, always_visible=True)
             elif dice < 70 + 10 + 10: # 10% chance for an EMP device
                 item_component = Item(use_function=cast_EMP_device)
-                item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component)
+                item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True)
             else: # 10% chance for an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
-                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_yellow, item=item_component)
+                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_yellow, item=item_component, always_visible=True)
 
             objects.append(item)
             item.send_to_back() # items appear below other objects
@@ -447,6 +453,7 @@ def get_names_under_mouse():
     names = ', '.join(names) # join the names separated by commas
     return names.capitalize()
 
+# render game information to screen
 def render_all():
     global fov_map, color_dark_wall, color_light_wall
     global color_dark_ground, color_light_ground
@@ -501,6 +508,9 @@ def render_all():
 
     # show the player's stats
     render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp, libtcod.light_red, libtcod.darker_red)
+
+    # display dungeon level to GUI
+    libtcod.console_print_ex(panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
 
     # display names of objects under the mouse
     libtcod.console_set_default_foreground(panel, libtcod.light_gray)
@@ -797,6 +807,9 @@ def handle_keys():
             player_move_or_attack(1, 1)
             fov_recompute = True
 
+        elif key.vk == libtcod.KEY_KP5: #player does nothing, same as "Wait"
+            pass
+
         elif key.vk == libtcod.KEY_BACKSPACE:
             # show the inventory; if an item is selected, drop it
             chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
@@ -820,6 +833,11 @@ def handle_keys():
                 if chosen_item is not None:
                     chosen_item.use()
 
+            if key_char == '.' and key.shift:
+                # go down the stairs, if the palyer is on them
+                if stairs.x == player.x and stairs.y == player.y:
+                    next_level()
+
             return 'didnt-take-turn'
 
 #############################################
@@ -838,12 +856,14 @@ def save_game():
     file['inventory'] = inventory
     file['game_msgs'] = game_msgs
     file['game_state'] = game_state
+    file['stairs_index'] = objects.index(stairs)
+    file['dungeon_level'] = dungeon_level
     file.close()
 
 # LOAD A SAVED GAME
 def load_game():
     # open the previously saved shelve and load the game data
-    global map, objects, player, inventory, game_msgs, game_state
+    global map, objects, player, inventory, game_msgs, game_state, stairs, dungeon_level
 
     file = shelve.open('savegame', 'r')
     map = file['map']
@@ -852,18 +872,23 @@ def load_game():
     inventory = file['inventory']
     game_msgs = file['game_msgs']
     game_state = file['game_state']
+    stairs = objects[file['stairs_index']]
+    dungeon_level = file['dungeon_level']
     file.close()
 
     initialize_fov()
 
 # START A NEW GAME
 def new_game():
-    global player, inventory, game_msgs, game_state
+    global player, inventory, game_msgs, game_state, dungeon_level
 
     #create object representing the player
     fighter_component = Fighter(hp=30, defense=0, power=5, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
     
+    # initialize dungeon level
+    dungeon_level = 1
+
     #generate map (at this point it's not drawn to the screen)
     make_map()
 
@@ -881,6 +906,18 @@ def new_game():
 
     # print a welcome message!
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
+
+# advance to the next level
+def next_level():
+    global dungeon_level
+    # heal the player by 50%
+    message('You take a moment to rest, and recover your strength.', libtcod.light_violet)
+    player.fighter.heal(player.fighter.max_hp / 2)
+
+    dungeon_level += 1
+    message('After a rare moment of peace, you descend deeper into the facility...', libtcod.red)
+    make_map() # create a new level!
+    initialize_fov()
 
 # INITIALIZE FOV MAP
 def initialize_fov():
