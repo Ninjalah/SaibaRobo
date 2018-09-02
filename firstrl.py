@@ -39,10 +39,6 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
-
-# RNG chances
-monster_chances = {'cyborg': 80, 'mecharachnid': 15, 'terminatron': 5}
-item_chances = {'heal': 70, 'lightning': 10, 'impact_grenade': 10, 'emp': 10}
  
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
@@ -373,6 +369,29 @@ def make_map():
     objects.append(stairs)
     stairs.send_to_back() #so it's drawn below the monsters
 
+    #########################################################################################
+    # DEBUG: Print chance of each monster spawning
+    print('------- Dungeon_Level: ' + str(dungeon_level) + ' -------')
+    mon_sum = 0
+    for key, value in monster_chances.iteritems():
+        print('Adding chance val of ' + str(value) + ' to spawn: ' + key)
+        mon_sum += value
+    print('Total val: ' + str(mon_sum))
+    
+    for key, value in monster_chances.iteritems():
+        print('Chance of ' + key + ' to spawn: ' + str((float(value) / mon_sum) * 100))
+
+    # DEBUG: Print chance of each item spawning
+    item_sum = 0
+    for key, value in item_chances.iteritems():
+        print('Adding chance val of ' + str(value) + ' to spawn: ' + key)
+        item_sum += value
+    print('Total val: ' + str(item_sum))
+
+    for key, value in item_chances.iteritems():
+        print('Chance of ' + key + ' to spawn: ' + str((float(value) / item_sum) * 100))
+    ##########################################################################################
+
 # choose one option from list of chances, returning its index
 def random_choice_index(chances):
     # the dice will land on some number between 1 and the sum of chances
@@ -405,6 +424,7 @@ def from_dungeon_level(table):
 
 def place_objects(room):
     # this is where we decide the chance of each monster or item appearing
+    global monster_chances, item_chances
 
     # max number of monsters per room
     max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
@@ -412,8 +432,8 @@ def place_objects(room):
     # chance of each mosnter
     monster_chances = {}
     monster_chances['cyborg'] = 70
-    monster_chances['mecharachnid'] = from_dungeon_level([[15, 1], [30, 3], [60, 5]])
-    monster_chances['terminatron'] = from_dungeon_level([[5, 1], [10, 3], [20, 5]])
+    monster_chances['mecharachnid'] = from_dungeon_level([[10, 1], [25, 3], [50, 5]])
+    monster_chances['terminatron'] = from_dungeon_level([[5, 1], [10, 3], [15, 5]])
 
     # maximum number of items per room
     max_items = from_dungeon_level([[1, 1], [2, 4]])
@@ -421,9 +441,9 @@ def place_objects(room):
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
     item_chances['heal'] = 35 # health pack always shows up, even if all other items have 0 chance
-    item_chances['lightning'] = from_dungeon_level([[25, 4]])
-    item_chances['impact_grenade'] = from_dungeon_level([[25, 6]])
-    item_chances['emp'] = from_dungeon_level([[10, 2]])
+    item_chances['lightning'] = from_dungeon_level([[5, 4]])
+    item_chances['impact_grenade'] = from_dungeon_level([[5, 6]])
+    item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -751,9 +771,12 @@ def menu(header, options, width):
 
 # show a menu with each item of the inventory as an option
 def inventory_menu(header):
+    global inventory
+
     if len(inventory) == 0:
         options = ['Inventory is empty.']
     else:
+        inventory = sorted(inventory, key=lambda k: k.name, reverse=True)
         options = [item.name for item in inventory]
 
     index = menu(header, options, INVENTORY_WIDTH)

@@ -22,6 +22,13 @@ Terminatron: A large, hulking robot that mercilessly pursues interlopers. Massiv
 
 # Brainstorming
 
+## General Notes
+* Change chances of Lightning Device spawning vs EMP. Currently, after level 4, chance of Lightning Device is higher than EMP.
+
+* Change chances of Terminatron spawning to be lower until level 5.
+
+* Update inventory so that it appears ordered.
+
 ## Player
 ### Stats
 * DX/CN: (Dexterity/Cunning) Determines player ability to make saving throws in dire situations (such as, mecharachnid grapple).
