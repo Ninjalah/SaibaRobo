@@ -866,6 +866,7 @@ def get_all_equipped(obj):
         equipped_list = []
         for item in inventory:
             if item.equipment and item.equipment.is_equipped:
+                print("get_all_equipped: equipment is " + item.equipment.name)
                 equipped_list.append(item.equipment)
         return equipped_list
     else:
