@@ -377,33 +377,13 @@ class Equipment:
         self.is_equipped = False
         message('Unequipped ' + self.owner.name + ' from ' + self.slot + '.', libtcod.light_yellow)
 
-    def cast_shoot(self):
-        if self.is_ranged == True:
-            message('Left-click a target tile to shoot, or right-click to cancel.', libtcod.light_cyan)
-            (x, y) = target_tile()
-            if x is None: return 'cancelled'
-
-            for obj in objects: # damage fighter at target_tile()
-                if (obj.x, obj.y) == (x, y) and obj.fighter:
-                    message('The ' + obj.name + ' is shot for ' + str(player.fighter.power) + ' hit points.', libtcod.orange)
-                    if self.ammo > 0:
-                        self.ammo -= 1
-                        obj.fighter.take_damage(player.fighter.power)
-                    else:
-                        message('Your ' + self.owner.name + ' is empty!', libtcod.orange)
-
-    def reload(self):
-        print('Attempting to reload ' + self.owner.name + '... Ammo: ' + str(self.ammo) + ' max_ammo: ' + str(self.max_ammo) + ' is_ranged: ' + str(self.is_ranged) + ' contains 10mm?: ' + str(inventory.__contains__('10mm_ammo')))
-        if self.is_ranged == True and self.ammo < self.max_ammo:
-            print('Slot is ' + self.slot)
-            print('All items equipped: ' + str(get_all_equipped(player.fighter)))
-            print('Equipped in right hand: ' + get_equipped_in_slot('right hand'))
-            message('You reload ' + get_equipped_in_slot('right hand') + '!', libtcod.orange)
-            equipped = get_equipped_in_slot(self.slot)
-            equipped.ammo += equipped.max_ammo - equipped.ammo
-            inventory.remove("10mm_ammo")
+    def use(self):
+        # just call the "use_function" if it is defined
+        if self.use_function is None:
+            message('The ' + self.owner.name + ' cannot be used.')
         else:
-            message('Nothing to reload!', libtcod.red)
+            if self.use_function() != 'cancelled':
+                return
 
 ########################
 # FUNCTION DEFINITIONS #
@@ -653,11 +633,11 @@ def place_objects(room):
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = Equipment(slot='right hand', is_ranged=False, power_bonus=DAGGER_DAMAGE)
-                item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component)
+                item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, power_bonus=PISTOL_DAMAGE)
-                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component)
+                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
             elif choice == '10mm_ammo':
                 # create a 10mm_ammo
                 item_component = Item()
@@ -791,7 +771,7 @@ def player_move_or_attack(dx, dy):
             break
 
     # attack if target found, otherwise move
-    if target is not None:
+    if target is not None: # TODO: add AND conditional to check that weapon is melee
         player.fighter.attack(target)
     else:
         player.move(dx, dy)
@@ -853,9 +833,7 @@ def check_level_up():
 
 # returns the equipment in a slot, or None if it's empty
 def get_equipped_in_slot(slot):
-    print('Entering get_equipped_in_slot...')
     for obj in inventory:
-        print('In get_equipped_in_slot, obj is ' + obj.name)
         if obj.equipment and obj.equipment.slot == slot and obj.equipment.is_equipped:
             return obj.equipment
     return None
@@ -866,7 +844,6 @@ def get_all_equipped(obj):
         equipped_list = []
         for item in inventory:
             if item.equipment and item.equipment.is_equipped:
-                print("get_all_equipped: equipment is " + item.equipment.name)
                 equipped_list.append(item.equipment)
         return equipped_list
     else:
@@ -963,7 +940,7 @@ def inventory_menu(header):
         inventory.sort(key=lambda k: k.name, reverse=False)
         options = []
         for item in inventory:
-            text = item.name
+            text = item.name + ' (' + str(item.equipment.ammo) + '/' + str(item.equipment.max_ammo) + ')' if (item.equipment and item.equipment.is_ranged) else item.name
             # show additional information, in case it's equipped
             if item.equipment and item.equipment.is_equipped:
                 text = text + ' (on ' + item.equipment.slot + ')'
@@ -1040,9 +1017,57 @@ def cast_impact_grenade():
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
+# shoot the weapon in your right hand
+def cast_shoot():
+    right_weapon = get_equipped_in_slot('right hand')
+
+    if right_weapon != None and right_weapon.is_ranged:
+        message('Left-click a target tile to shoot, or right-click to cancel.', libtcod.light_cyan)
+        (x, y) = target_tile()
+        if x is None: return 'cancelled'
+
+        for obj in objects: # damage fighter at target_tile()
+            if (obj.x, obj.y) == (x, y) and obj.fighter:
+                if right_weapon.ammo > 0:
+                    right_weapon.ammo -= 1
+                    obj.fighter.take_damage(player.fighter.power)
+                    message('The ' + obj.name + ' is shot for ' + str(player.fighter.power) + ' hit points.', libtcod.orange)
+                else:
+                    message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
+
+# reload the weapon in your right hand
+def cast_reload():
+    right_weapon = get_equipped_in_slot('right hand')
+    ammo_to_reload = find_in_inventory('10mm_ammo')
+
+    if right_weapon != None and right_weapon.is_ranged and right_weapon.ammo < right_weapon.max_ammo and ammo_to_reload != None:
+        message('You reload ' + str(get_equipped_in_slot('right hand')) + '!', libtcod.orange)
+        equipped = get_equipped_in_slot(right_weapon.slot)
+        equipped.ammo += equipped.max_ammo - equipped.ammo
+        remove_from_inventory('10mm_ammo')
+    else:
+        message('Nothing to reload!', libtcod.red)
+
 # a box for messages straight to MAIN MENU
 def msgbox(text, width=50):
     menu(text, [], width) #use menu() as a sort of "message box"
+
+# finds an object in inventory, retrieves it
+def find_in_inventory(obj_str):
+    for item in inventory:
+        if item.name == obj_str:
+            return item
+    
+    message('Could not find ' + obj_str + ' in inventory.')
+    return None
+
+# finds an object and removes it from inventory
+def remove_from_inventory(obj_str):
+    for item in inventory:
+        if item.name == obj_str:
+            inventory.remove(item)
+            return True
+    return False
 
 # handle player inputs
 def handle_keys():
@@ -1116,7 +1141,7 @@ def handle_keys():
             # use equipment; if ranged, call shoot() function
             if key_char == 'f':
                 if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
-                    get_equipped_in_slot('right hand').cast_shoot()
+                    cast_shoot()
 
             if key_char == 'i':
                 # show the inventory; if an item is selected, use it
@@ -1134,7 +1159,7 @@ def handle_keys():
             if key_char == 'r':
                 # reload current weapon
                 if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
-                    get_equipped_in_slot('right hand').reload()
+                    cast_reload()
 
             if key_char == '.' and key.shift:
                 # go down the stairs, if the player is on them
