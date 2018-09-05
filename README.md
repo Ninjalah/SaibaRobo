@@ -1,7 +1,18 @@
 # SaibaRobo
 Description: Cyberpunk Roguelike Action
 
-**Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
+## TODO
+* **Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
+
+* **Fix reload messages: TODO found in game code.**
+
+* **Add a keyboard-controlled aiming system**: Draw a green line (of .'s) to a cursor (denoted by a green x), fire at the tile under the cursor.  Start the cursor at the location of the nearest monster.
+
+* **Melee attacks with a ranged weapon does lesser damage.**
+
+* **Change 10mm ammo char from " to '.**
+
+* **Add Energy Blade after level 3 or so (becoming more common).**
 
 ## Player
 ### Stats
@@ -25,21 +36,27 @@ Terminatron: A large, hulking robot that mercilessly pursues interlopers. Massiv
 
 * Update inventory so that it appears ordered. **COMPLETED**
 
-* Change RNG rolls for monster/item generation to be based on 100 as a total.
+* Change RNG rolls for monster/item generation to be based on 100 as a total. **COMPLETED, needs to be maintained per monster/item addition**
 
 ## Player
 ### Stats
 * DX/CN: (Dexterity/Cunning) Determines player ability to make saving throws in dire situations (such as, mecharachnid grapple).
 * IN/TC: (Intellect/Technical) Determines the success rate of certain technical rolls, such as success chance when jacking a fallen Cyborg's brain.
+* ACC: (Accuracy) Determines the player's ability to successfully hit their target.
 
 ### Weapons
 General section for weapons used by the player character (and some monsters).
 
 * **Fists**: The player's fists. Does superficial damage, melee-only, available from the start.
 
-* **Pistol**: Basic semi-automatic pistol. Does minimal damage, has average crit chance, uses bullets.
+* **Pistol**: Basic semi-automatic pistol. Does minimal damage, has average crit chance, uses 10mm bullets. **COMPLETED**
 
 * **Dagger**: A weak energy dagger. Does minimal damage, melee-only. **COMPLETED**
+
+### Ammo
+General section for ammo and ammo types used by the player character.
+
+* **10mm ammo**: Ammo currently only used by the pistol. Dropped after single use.
 
 ### Items
 General section for items used by the player character (and some monsters).
@@ -55,9 +72,9 @@ General section for items used by the player character (and some monsters).
 * **Devices**: Akin to "spells" in more traditional roguelikes; have one-time usage unless otherwise specified.
     * **Detect Electrical Fields**: Detects electro-magnetic pulses, allowing the Player to see any robotic enemy through the fog-of-war. Lasts a certain duration.
     * **Detect Minds**: Detects brain activity, allowing the Player to see any humanoid enemy through the fog-of-war. Lasts a certain duration.
-    * **Lightning**: Shoots a bolt of lightning from the Player to the *nearest enemy*. Does moderate damage.
-    * **EMP**: Damages enemy circuits, causing a Confusion state for a duration.
-    * **Impact Grenade**: A grenade that immediately explodes on impact, damaging all monsters (including the player) nearby.
+    * **Lightning**: Shoots a bolt of lightning from the Player to the *nearest enemy*. Does moderate damage. **COMPLETED**
+    * **EMP**: Damages enemy circuits, causing a Confusion state for a duration. **COMPLETED**
+    * **Impact Grenade**: A grenade that immediately explodes on impact, damaging all monsters (including the player) nearby. **COMPLETED**
 
 * **Weapon Modifications**: Modify weapons to give certain specific advantages, etc.
   * **Flashlight**: Can be wielded in the left hand, increases Player's FOV while equipped.
