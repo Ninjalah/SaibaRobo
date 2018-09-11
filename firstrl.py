@@ -206,6 +206,7 @@ class Object:
         else:
             # keep the old move function as a backup so that if there are no paths (for example, another monster blocks a corridor)
             # it will still try to move towards the player (closer to the corridor opening)
+            # TODO: Does this ever get called? It seems that monsters attempt to always find a way around if a corridor is blocked, instead of moving closer
             self.move_towards(target.x, target.y)
 
         # delete the path to free memory
@@ -278,6 +279,7 @@ class BasicMonster:
             # move towards player if far away
             if monster.distance_to(player) >= 2:
                 print('Moving ' + monster.name + ' to player.')
+                monster.clear()
                 monster.move_astar(player)
             
             # close enough, attack! (if the player is still alive)
@@ -1020,7 +1022,6 @@ def cast_impact_grenade():
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
 # shoot the weapon in your right hand
-# TODO: A turn should pass after shooting
 def cast_shoot():
     right_weapon = get_equipped_in_slot('right hand')
     monsterFound = False
@@ -1048,7 +1049,6 @@ def cast_shoot():
     print('Made it to end of cast_shoot()')
 
 # reload the weapon in your right hand
-# TODO: A turn should pass after reloading
 def cast_reload():
     right_weapon = get_equipped_in_slot('right hand')
     ammo_to_reload = find_in_inventory('10mm_ammo')
@@ -1181,6 +1181,7 @@ def handle_keys():
             if key_char == 'f':
                 if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
                     if cast_shoot() is not 'cancelled':
+                        print('Shoot is not cancelled.')
                         return 'turn-taken'
                 else:
                     message('No weapon to shoot with!', libtcod.red)
@@ -1235,7 +1236,7 @@ def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level
 
     #create object representing the player
-    fighter_component = Fighter(hp=10000, defense=0, power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=30, defense=0, power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
 
     player.level = 1
