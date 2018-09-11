@@ -206,6 +206,7 @@ class Object:
         else:
             # keep the old move function as a backup so that if there are no paths (for example, another monster blocks a corridor)
             # it will still try to move towards the player (closer to the corridor opening)
+            # TODO: Does this ever get called? It seems that monsters attempt to always find a way around if a corridor is blocked, instead of moving closer
             self.move_towards(target.x, target.y)
 
         # delete the path to free memory
@@ -277,6 +278,8 @@ class BasicMonster:
 
             # move towards player if far away
             if monster.distance_to(player) >= 2:
+                print('Moving ' + monster.name + ' to player.')
+                monster.clear()
                 monster.move_astar(player)
             
             # close enough, attack! (if the player is still alive)
@@ -344,6 +347,7 @@ class Item:
                 inventory.remove(self.owner) # destroy after use, unless it was cancelled for some reason
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
+# TODO: Add ranged_power_bonus & melee_power_bonus
 class Equipment:
     def __init__(self, slot, is_ranged=False, max_ammo=0, ammo=0, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
@@ -573,8 +577,8 @@ def place_objects(room):
     item_chances['impact_grenade'] = from_dungeon_level([[0, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
-    item_chances['pistol'] = from_dungeon_level([[10, 1]])
-    item_chances['10mm_ammo'] = from_dungeon_level([[15, 1]])
+    item_chances['pistol'] = from_dungeon_level([[50, 1]])
+    item_chances['10mm_ammo'] = from_dungeon_level([[55, 1]])
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -1020,20 +1024,29 @@ def cast_impact_grenade():
 # shoot the weapon in your right hand
 def cast_shoot():
     right_weapon = get_equipped_in_slot('right hand')
+    monsterFound = False
 
     if right_weapon != None and right_weapon.is_ranged:
         message('Left-click a target tile to shoot, or right-click to cancel.', libtcod.light_cyan)
         (x, y) = target_tile()
         if x is None: return 'cancelled'
 
-        for obj in objects: # damage fighter at target_tile()
-            if (obj.x, obj.y) == (x, y) and obj.fighter:
-                if right_weapon.ammo > 0:
-                    right_weapon.ammo -= 1
+        if right_weapon.ammo > 0:
+            right_weapon.ammo -= 1
+            for obj in objects: # damage fighter at target_tile()
+                if (obj.x, obj.y) == (x, y) and obj.fighter:
+                    monsterFound = True
                     obj.fighter.take_damage(player.fighter.power)
                     message('The ' + obj.name + ' is shot for ' + str(player.fighter.power) + ' hit points.', libtcod.orange)
-                else:
-                    message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
+            # No monster was found at tile shot at
+            if monsterFound == False: 
+                message('You shoot the floor. Sick.', libtcod.red)
+        else:
+            message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
+            return 'cancelled'
+    
+    
+    print('Made it to end of cast_shoot()')
 
 # reload the weapon in your right hand
 def cast_reload():
@@ -1041,12 +1054,19 @@ def cast_reload():
     ammo_to_reload = find_in_inventory('10mm_ammo')
 
     if right_weapon != None and right_weapon.is_ranged and right_weapon.ammo < right_weapon.max_ammo and ammo_to_reload != None:
-        message('You reload ' + str(get_equipped_in_slot('right hand')) + '!', libtcod.orange)
+        message('You reload ' + right_weapon.owner.name + '!', libtcod.orange)
         equipped = get_equipped_in_slot(right_weapon.slot)
         equipped.ammo += equipped.max_ammo - equipped.ammo
         remove_from_inventory('10mm_ammo')
-    else:
+    elif right_weapon != None and right_weapon.is_ranged and right_weapon.ammo == right_weapon.max_ammo:
+        message(right_weapon.owner.name + ' is already full of ammo!', libtcod.red)
+        return 'cancelled'
+    elif right_weapon == None:
         message('Nothing to reload!', libtcod.red)
+        return 'cancelled'
+    elif ammo_to_reload == None:
+        message('No ammo!', libtcod.red)
+        return 'cancelled'
 
 # a box for messages straight to MAIN MENU
 def msgbox(text, width=50):
@@ -1058,7 +1078,6 @@ def find_in_inventory(obj_str):
         if item.name == obj_str:
             return item
     
-    message('Could not find ' + obj_str + ' in inventory.')
     return None
 
 # finds an object and removes it from inventory
@@ -1132,22 +1151,19 @@ def handle_keys():
             key_char = chr(key.c)
 
             if key_char == 'g':
+
                 # pick up an item
                 for object in objects: #look for an item in the player's tile
                     if object.x == player.x and object.y == player.y and object.item:
                         object.item.pick_up()
-                        break
-
-            # use equipment; if ranged, call shoot() function
-            if key_char == 'f':
-                if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
-                    cast_shoot()
+                        return 'turn-taken'
 
             if key_char == 'i':
                 # show the inventory; if an item is selected, use it
                 chosen_item = inventory_menu('Press the key next to an item to use it, or any other to cancel.\n')
                 if chosen_item is not None:
                     chosen_item.use()
+                    return 'turn-taken'
 
             if key_char == 'c':
                 # show character stats
@@ -1158,8 +1174,17 @@ def handle_keys():
 
             if key_char == 'r':
                 # reload current weapon
+                if cast_reload() is not 'cancelled':
+                    return 'turn-taken'
+
+            # use equipment; if ranged, call cast_shoot() function
+            if key_char == 'f':
                 if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
-                    cast_reload()
+                    if cast_shoot() is not 'cancelled':
+                        print('Shoot is not cancelled.')
+                        return 'turn-taken'
+                else:
+                    message('No weapon to shoot with!', libtcod.red)
 
             if key_char == '.' and key.shift:
                 # go down the stairs, if the player is on them
@@ -1211,7 +1236,7 @@ def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level
 
     #create object representing the player
-    fighter_component = Fighter(hp=10000, defense=0, power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=30, defense=0, power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
 
     player.level = 1
