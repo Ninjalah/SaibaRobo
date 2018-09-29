@@ -40,7 +40,8 @@ CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
 FISTS_DAMAGE = 0
-PISTOL_DAMAGE = 5
+PISTOL_RANGED_DAMAGE = 5
+PISTOL_MELEE_DAMAGE = 1
 DAGGER_DAMAGE = 3
  
 FOV_ALGO = 0  #default FOV algorithm
@@ -128,6 +129,14 @@ class Object:
             self.x += dx
             self.y += dy
 
+    def move_reticule(self, dx, dy):
+        #move the reticule by the given amount, don't check for blocking structures
+        if ((self.x + dx < MAP_WIDTH and self.y + dy < MAP_HEIGHT) and (self.x + dx >= 0 and self.y + dy >= 0)):
+            self.x += dx
+            self.y += dy
+
+        print("X: " + str(self.x) + " Y: " + str(self.y))
+
     def move_towards(self, target_x, target_y):
         # vector from this object to the target, and distance
         dx = target_x - self.x
@@ -155,10 +164,16 @@ class Object:
         global objects
         objects.remove(self)
         objects.insert(0, self)
+
+    # make this object be drawn last, so all others appear below it if they're in the same tile
+    def send_to_front(self):
+        global objects
+        objects.remove(self)
+        objects.insert(len(objects), self)
  
     def draw(self):
-        #only show if it's visible to the player OR if it's explored and always_visible = True
-        if (libtcod.map_is_in_fov(fov_map, self.x, self.y) or (self.always_visible and map[self.x][self.y].explored)):
+        #only show if it's visible to the player OR if it's explored and always_visible = True OR if the object is the aiming reticule
+        if (libtcod.map_is_in_fov(fov_map, self.x, self.y) or (self.always_visible and map[self.x][self.y].explored) or (self.name == 'Reticule')):
             #set the color and then draw the character that represents this object at its position
             libtcod.console_set_default_foreground(con, self.color)
             libtcod.console_put_char(con, self.x, self.y, self.char, libtcod.BKGND_NONE)
@@ -214,19 +229,25 @@ class Object:
 
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
-    def __init__(self, hp, defense, power, xp, death_function=None):
+    def __init__(self, hp, defense, xp, melee_power=0, ranged_power=0, death_function=None):
         self.base_max_hp = hp
         self.hp = hp
         self.base_defense = defense
-        self.base_power = power
+        self.base_melee_power = melee_power
+        self.base_ranged_power = ranged_power
         self.xp = xp
         self.death_function = death_function
 
     # return actual power, by summing up the bonuses from all equipped items
     @property
-    def power(self):
-        bonus = sum(equipment.power_bonus for equipment in get_all_equipped(self.owner))
-        return self.base_power + bonus
+    def melee_power(self):
+        bonus = sum(equipment.melee_power_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_melee_power + bonus
+
+    @property
+    def ranged_power(self):
+        bonus = sum(equipment.ranged_power_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_ranged_power + bonus
 
     @property
     def defense(self):
@@ -240,7 +261,7 @@ class Fighter:
 
     # a simple formula for attack damage
     def attack(self, target):
-        damage = self.power - target.fighter.defense
+        damage = self.melee_power - target.fighter.defense
 
         if damage > 0:
             # make the target take some damage
@@ -278,7 +299,6 @@ class BasicMonster:
 
             # move towards player if far away
             if monster.distance_to(player) >= 2:
-                print('Moving ' + monster.name + ' to player.')
                 monster.clear()
                 monster.move_astar(player)
             
@@ -335,7 +355,6 @@ class Item:
     def use(self):
         # special case: if the object has the Equipment component, the "use" action is to equip/dequip
         if self.owner.equipment:
-            # TODO: Maybe this is where pistol bug occurs? As the pistol doesn't have a "use_function" currently
             self.owner.equipment.toggle_equip()
             return
 
@@ -347,11 +366,11 @@ class Item:
                 inventory.remove(self.owner) # destroy after use, unless it was cancelled for some reason
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
-# TODO: Add ranged_power_bonus & melee_power_bonus
 class Equipment:
-    def __init__(self, slot, is_ranged=False, max_ammo=0, ammo=0, power_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_power_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
-        self.power_bonus = power_bonus
+        self.melee_power_bonus = melee_power_bonus
+        self.ranged_power_bonus = ranged_power_bonus
         self.defense_bonus = defense_bonus
         self.max_hp_bonus = max_hp_bonus
         self.is_equipped = False
@@ -419,7 +438,7 @@ def create_h_tunnel(x1, x2, y):
     for x in range(min(x1, x2), max(x1, x2) + 1):
         map[x][y].blocked = False
         map[x][y].block_sight = False
- 
+
 def create_v_tunnel(y1, y2, x):
     global map
     #vertical tunnel
@@ -577,8 +596,8 @@ def place_objects(room):
     item_chances['impact_grenade'] = from_dungeon_level([[0, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
-    item_chances['pistol'] = from_dungeon_level([[50, 1]])
-    item_chances['10mm_ammo'] = from_dungeon_level([[55, 1]])
+    item_chances['pistol'] = from_dungeon_level([[10, 1]])
+    item_chances['10mm_ammo'] = from_dungeon_level([[15, 1]])
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -593,15 +612,15 @@ def place_objects(room):
         if not is_blocked(x, y):
             choice = random_choice(monster_chances)
             if choice == 'terminatron':
-                fighter_component = Fighter(hp=100, defense=5, power=10, xp=10000, death_function=monster_death)
+                fighter_component = Fighter(hp=100, defense=5, melee_power=10, xp=10000, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component)
             elif choice == 'mecharachnid':
-                fighter_component = Fighter(hp=15, defense=1, power=4, xp=100, death_function=monster_death)
+                fighter_component = Fighter(hp=15, defense=1, melee_power=4, xp=100, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component)
             elif choice == 'cyborg':
-                fighter_component = Fighter(hp=10, defense=0, power=2, xp=35, death_function=monster_death)
+                fighter_component = Fighter(hp=10, defense=0, melee_power=2, xp=35, death_function=monster_death)
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component)
 
@@ -636,11 +655,11 @@ def place_objects(room):
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True)
             elif choice == 'dagger':
                 # create an energy dagger
-                equipment_component = Equipment(slot='right hand', is_ranged=False, power_bonus=DAGGER_DAMAGE)
+                equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
                 item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True)
             elif choice == 'pistol':
                 # create a standard pistol
-                equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, power_bonus=PISTOL_DAMAGE)
+                equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
                 item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
             elif choice == '10mm_ammo':
                 # create a 10mm_ammo
@@ -716,9 +735,11 @@ def render_all():
  
     #draw all objects in the list
     for object in objects:
-        if object != player:
+        if object != player or object != reticule:
             object.draw()
     player.draw()
+    if reticule is not None:
+        reticule.draw()
  
     #blit the contents of "con" to the root console
     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
@@ -970,6 +991,26 @@ def closest_monster(max_range):
                 closest_dist = dist
     return closest_enemy
 
+# player takes aim at a target tile
+def take_aim():
+    global game_state, reticule
+
+    monster = closest_monster(TORCH_RADIUS)
+    if monster is not None:
+        (x, y) = (monster.x, monster.y)
+    else:
+        (x, y) = (player.x+1, player.y)
+
+    reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True)
+    objects.append(reticule)
+    reticule.send_to_front()
+    game_state = "aiming"
+    message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
+
+def move_reticule(dx, dy):
+    # move reticule to specified coordinates
+    reticule.move_reticule(dx, dy)
+
 # heal the player
 def cast_heal():
     if player.fighter.hp == player.fighter.base_max_hp: # don't heal the player if at full hp already
@@ -1021,14 +1062,13 @@ def cast_impact_grenade():
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
-# shoot the weapon in your right hand
-def cast_shoot():
+# shoot the weapon in your right hand at tile (dx, dy)
+def cast_shoot(dx, dy):
     right_weapon = get_equipped_in_slot('right hand')
     monsterFound = False
 
     if right_weapon != None and right_weapon.is_ranged:
-        message('Left-click a target tile to shoot, or right-click to cancel.', libtcod.light_cyan)
-        (x, y) = target_tile()
+        (x, y) = (dx, dy)
         if x is None: return 'cancelled'
 
         if right_weapon.ammo > 0:
@@ -1036,8 +1076,8 @@ def cast_shoot():
             for obj in objects: # damage fighter at target_tile()
                 if (obj.x, obj.y) == (x, y) and obj.fighter:
                     monsterFound = True
-                    obj.fighter.take_damage(player.fighter.power)
-                    message('The ' + obj.name + ' is shot for ' + str(player.fighter.power) + ' hit points.', libtcod.orange)
+                    obj.fighter.take_damage(player.fighter.ranged_power)
+                    message('The ' + obj.name + ' is shot for ' + str(player.fighter.ranged_power) + ' hit points.', libtcod.orange)
             # No monster was found at tile shot at
             if monsterFound == False: 
                 message('You shoot the floor. Sick.', libtcod.red)
@@ -1045,9 +1085,6 @@ def cast_shoot():
             message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
             return 'cancelled'
     
-    
-    print('Made it to end of cast_shoot()')
-
 # reload the weapon in your right hand
 def cast_reload():
     right_weapon = get_equipped_in_slot('right hand')
@@ -1088,16 +1125,78 @@ def remove_from_inventory(obj_str):
             return True
     return False
 
+def remove_reticule():
+    global game_state, reticule
+
+    objects.remove(reticule)
+    reticule = None
+    game_state = 'playing'
+
 # handle player inputs
 def handle_keys():
-    global fov_recompute, key
+    global fov_recompute, key, reticule, game_state
  
     if key.vk == libtcod.KEY_ENTER and key.ralt:
         #Alt+Enter: toggle fullscreen
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+        return 'didnt-take-turn'
  
-    elif key.vk == libtcod.KEY_ESCAPE:
+    elif key.vk == libtcod.KEY_ESCAPE and game_state is not 'aiming':
         return 'exit'  #exit game
+
+    if game_state == 'aiming':
+        if key.vk == libtcod.KEY_UP:
+            move_reticule(0, -1)
+    
+        elif key.vk == libtcod.KEY_DOWN:
+            move_reticule(0, 1)
+    
+        elif key.vk == libtcod.KEY_LEFT:
+            move_reticule(-1, 0)
+    
+        elif key.vk == libtcod.KEY_RIGHT:
+            move_reticule(1, 0)
+
+        elif key.vk == libtcod.KEY_KP8:
+            move_reticule(0, -1)
+
+        elif key.vk == libtcod.KEY_KP2:
+            move_reticule(0, 1)
+
+        elif key.vk == libtcod.KEY_KP4:
+            move_reticule(-1, 0)
+
+        elif key.vk == libtcod.KEY_KP6:
+            move_reticule(1, 0)
+
+        elif key.vk == libtcod.KEY_KP1:
+            move_reticule(-1, 1)
+
+        elif key.vk == libtcod.KEY_KP7:
+            move_reticule(-1, -1)
+
+        elif key.vk == libtcod.KEY_KP9:
+            move_reticule(1, -1)
+
+        elif key.vk == libtcod.KEY_KP3:
+            move_reticule(1, 1)
+        else:
+            # test for other keys
+            key_char = chr(key.c)
+
+            print('Key is: ' + str(key.vk))
+
+            # shoot if Player presses F while aiming
+            if key_char == 'f':
+                if cast_shoot(reticule.x, reticule.y) is not 'cancelled':
+                    remove_reticule()
+                    return 'turn-taken'
+                else:
+                    remove_reticule()
+                    return 'didnt-take-turn'
+            elif key_char is not 'f' and key.c is not 0 and key.vk is not 0:
+                remove_reticule()
+                return 'didnt-take-turn'
 
     if game_state == 'playing':
         #movement keys
@@ -1170,7 +1269,8 @@ def handle_keys():
                 level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
                 msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
                     '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
-                    '\nAttack: ' + str(player.fighter.power) + '\nDefense: ' + str(player.fighter.defense), CHARACTER_SCREEN_WIDTH)
+                    '\nMelee Attack: ' + str(player.fighter.melee_power) + '\nRanged Attack: ' + str(player.fighter.ranged_power) +
+                     '\nDefense: ' + str(player.fighter.defense), CHARACTER_SCREEN_WIDTH)
 
             if key_char == 'r':
                 # reload current weapon
@@ -1180,8 +1280,7 @@ def handle_keys():
             # use equipment; if ranged, call cast_shoot() function
             if key_char == 'f':
                 if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
-                    if cast_shoot() is not 'cancelled':
-                        print('Shoot is not cancelled.')
+                    if take_aim() is not 'cancelled':
                         return 'turn-taken'
                 else:
                     message('No weapon to shoot with!', libtcod.red)
@@ -1233,10 +1332,13 @@ def load_game():
 
 # START A NEW GAME
 def new_game():
-    global player, inventory, game_msgs, game_state, dungeon_level
+    global player, inventory, game_msgs, game_state, dungeon_level, reticule
+
+    #create empty reticule object
+    reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=30, defense=0, power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=30, defense=0, melee_power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
 
     player.level = 1
@@ -1261,6 +1363,12 @@ def new_game():
 
     # print a welcome message!
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
+
+    # TODO: DELETE THIS DEBUGGING/TESTING CODE
+    equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
+    inventory.append(obj)
+    equipment_component.equip()
 
     # # initial equipment: a dagger
     # equipment_component = Equipment(slot='right hand', is_ranged=False, power_bonus=DAGGER_DAMAGE)
