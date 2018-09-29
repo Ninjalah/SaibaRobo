@@ -698,6 +698,17 @@ def get_names_under_mouse():
     names = ', '.join(names) # join the names separated by commas
     return names.capitalize()
 
+# get equipment and ammo information from player
+def display_equipment_info():
+    equipment_component = get_equipped_in_slot('right hand')
+    if equipment_component is not None: # if there is some equipped item
+        if equipment_component.is_ranged: # if equipment is ranged
+            libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
+        else:
+            libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name))
+    else:
+        libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Unarmed')    
+
 # render game information to screen
 def render_all():
     global fov_map, color_dark_wall, color_light_wall
@@ -766,6 +777,9 @@ def render_all():
 
     # show the player's stats
     render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.base_max_hp, libtcod.light_red, libtcod.darker_red)
+
+    # show the player's equipment and ammo (if applicable)
+    display_equipment_info()
 
     # display dungeon level to GUI
     libtcod.console_print_ex(panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
@@ -1387,17 +1401,16 @@ def new_game():
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
-    equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
-    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
-    inventory.append(obj)
-    equipment_component.equip()
+    #equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+    #obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
+    #inventory.append(obj)
+    #equipment_component.equip()
 
     # # initial equipment: a dagger
-    # equipment_component = Equipment(slot='right hand', is_ranged=False, power_bonus=DAGGER_DAMAGE)
-    # obj = Object(0, 0, 'i', 'Dagger', libtcod.green, equipment=equipment_component)
-    # inventory.append(obj)
-    # equipment_component.equip()
-    # obj.always_visible = True
+    #equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
+    #obj = Object(0, 0, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True)
+    #inventory.append(obj)
+    #equipment_component.equip()
 
 # advance to the next level
 def next_level():

@@ -1,5 +1,5 @@
 # SaibaRobo
-Description: Cyberpunk Roguelike Action
+Cyberpunk Roguelike Action
 
 ## TODO
 * **Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
@@ -7,6 +7,7 @@ Description: Cyberpunk Roguelike Action
 * **General**
   * **TODO**: Add blood droplets when Fighters take minor (non-lethal) damage
   * **TODO**: Add a special message for if Player shoots and kills themselves
+  * **TODO**: Leveling system currently broken due to Stat mismatch
 
 * **HUD**
   * **TODO**: Add a counter/currently-equipped message to the UI under the dungeon level
@@ -19,6 +20,10 @@ Description: Cyberpunk Roguelike Action
 * **Aiming System**
   * Currently the aiming system is based on FOV
   * **TODO**: Update aiming system so that bullets follow along a path, and hits anything that blocks before reaching reticule (walls, enemies, etc.)
+
+* **Weapons**
+  * **TODO**: Take only the necessary ammo from an ammo clip. If ammo clip has 0 rounds in it, discard from inventory automatically.
+    * Current behavior: Ammo clips are used and discarded for every reload, regardless of how many rounds are in the weapon when reloaded.
 
 * **Melee attacks with a ranged weapon do lesser damage.**
   * Currently ranged weapons have their own fixed melee damages. Will add statistics that modify this damage (such as STR)
