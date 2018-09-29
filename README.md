@@ -10,7 +10,7 @@ Cyberpunk Roguelike Action
   * **TODO**: Leveling system currently broken due to Stat mismatch
 
 * **HUD**
-  * **TODO**: Add a counter/currently-equipped message to the UI under the dungeon level
+  * **FINISHED**: Add a counter/currently-equipped message to the UI under the dungeon level
 
 * **Add keyboard-controls for aiming system**: Draw a green line (of -'s) to a cursor (denoted by a green x), fire at the tile under the cursor.  Start the cursor at the location of the nearest monster.
   * Added for ranged weapons
