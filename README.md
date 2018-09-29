@@ -4,15 +4,33 @@ Description: Cyberpunk Roguelike Action
 ## TODO
 * **Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
 
-* **Fix reload messages: TODO found in game code.**
+* **General**
+  * **TODO**: Add blood droplets when Fighters take minor (non-lethal) damage
+  * **TODO**: Add a special message for if Player shoots and kills themselves
 
-* **Add a keyboard-controlled aiming system**: Draw a green line (of .'s) to a cursor (denoted by a green x), fire at the tile under the cursor.  Start the cursor at the location of the nearest monster.
+* **HUD**
+  * **TODO**: Add a counter/currently-equipped message to the UI under the dungeon level
 
-* **Melee attacks with a ranged weapon does lesser damage.**
+* **Add keyboard-controls for aiming system**: Draw a green line (of -'s) to a cursor (denoted by a green x), fire at the tile under the cursor.  Start the cursor at the location of the nearest monster.
+  * Added for ranged weapons
+  * **TODO**: Add this functionality to devices as well (such as the Impact Grenade, which still currently uses mouse targeting)
+  * **TODO**: Fix AIM_RETICULE() so that if the reticule is placed on NEAREST_MONSTER, that same monster is chosen if AIM_RETICULE() is called again while another monster becomes the NEAREST_MONSTER (persistent targeting)
+
+* **Aiming System**
+  * Currently the aiming system is based on FOV
+  * **TODO**: Update aiming system so that bullets follow along a path, and hits anything that blocks before reaching reticule (walls, enemies, etc.)
+
+* **Melee attacks with a ranged weapon do lesser damage.**
+  * Currently ranged weapons have their own fixed melee damages. Will add statistics that modify this damage (such as STR)
 
 * **Change 10mm ammo char from " to '.**
 
-* **Add Energy Blade after level 3 or so (becoming more common).**
+* **Add Weapons**
+  * Energy Sword
+  * Shotgun
+
+* **Add the ability to throw items**
+  * Add the chance for items to break when throwing them (hard items such as weapons only?)
 
 ## Player
 ### Stats
