@@ -135,8 +135,6 @@ class Object:
             self.x += dx
             self.y += dy
 
-        print("X: " + str(self.x) + " Y: " + str(self.y))
-
     def move_towards(self, target_x, target_y):
         # vector from this object to the target, and distance
         dx = target_x - self.x
@@ -733,15 +731,26 @@ def render_all():
                     # since it's visible, it's explored
                     map[x][y].explored = True
  
-    #draw all objects in the list
+    # draw all objects in the list except player and reticule
     for object in objects:
         if object != player or object != reticule:
             object.draw()
-    player.draw()
+    player.draw() # draw the player object
+    # draw the reticule object last (over the player)
     if reticule is not None:
         reticule.draw()
+        libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
+        x, y = libtcod.line_step()
+        while (x is not None):
+            #stop drawing line segments once we're at the reticule
+            if (x == reticule.x and y == reticule.y):
+                break
+            #set the color and then draw the character that represents this object at its position
+            libtcod.console_set_default_foreground(con, reticule.color)
+            libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+            x, y = libtcod.line_step()
  
-    #blit the contents of "con" to the root console
+    # blit the contents of "con" to the root console
     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
 
     # prepare to render the GUI panel
@@ -1007,7 +1016,20 @@ def take_aim():
     game_state = "aiming"
     message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
 
+# clear all reticule segments between player and reticule
+def clear_reticule_segments():
+    libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
+    x, y = libtcod.line_step()
+    while (x is not None):
+        if (x == reticule.x and y == reticule.y):
+            break
+        libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+        x, y = libtcod.line_step()
+
 def move_reticule(dx, dy):
+    # before moving reticule, clear reticule segments
+    clear_reticule_segments()
+
     # move reticule to specified coordinates
     reticule.move_reticule(dx, dy)
 
@@ -1076,8 +1098,8 @@ def cast_shoot(dx, dy):
             for obj in objects: # damage fighter at target_tile()
                 if (obj.x, obj.y) == (x, y) and obj.fighter:
                     monsterFound = True
-                    obj.fighter.take_damage(player.fighter.ranged_power)
                     message('The ' + obj.name + ' is shot for ' + str(player.fighter.ranged_power) + ' hit points.', libtcod.orange)
+                    obj.fighter.take_damage(player.fighter.ranged_power)
             # No monster was found at tile shot at
             if monsterFound == False: 
                 message('You shoot the floor. Sick.', libtcod.red)
@@ -1127,6 +1149,8 @@ def remove_from_inventory(obj_str):
 
 def remove_reticule():
     global game_state, reticule
+
+    clear_reticule_segments()
 
     objects.remove(reticule)
     reticule = None
@@ -1183,8 +1207,6 @@ def handle_keys():
         else:
             # test for other keys
             key_char = chr(key.c)
-
-            print('Key is: ' + str(key.vk))
 
             # shoot if Player presses F while aiming
             if key_char == 'f':
