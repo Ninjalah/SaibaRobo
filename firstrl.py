@@ -2,6 +2,7 @@ import libtcodpy as libtcod
 import math
 import textwrap
 import shelve
+from time import sleep
  
 #actual size of the window
 SCREEN_WIDTH = 80
@@ -21,6 +22,15 @@ MSG_HEIGHT = PANEL_HEIGHT - 1
 INVENTORY_WIDTH = 50
 LEVEL_SCREEN_WIDTH = 40
 CHARACTER_SCREEN_WIDTH = 30
+
+# Z-Axis values
+BLOODDROP_Z_VAL = 0
+CORPSE_Z_VAL = 1
+STAIRS_Z_VAL = 2
+ITEM_Z_VAL = 3
+MONSTER_Z_VAL = 4
+PLAYER_Z_VAL = 5
+RETICULE_Z_VAL = 99
  
 # parameters for dungeon generator (num of monsters, items, etc.)
 ROOM_MAX_SIZE = 10
@@ -95,9 +105,10 @@ class Rect:
 class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
-    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None):
+    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, z=0):
         self.x = x
         self.y = y
+        self.z = z
         self.char = char
         self.color = color
         self.name = name
@@ -126,6 +137,13 @@ class Object:
     def move(self, dx, dy):
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
+            print(self.name + ' is moving!')
+
+            print(self.name + ' hp / max hp: ' + str(float(self.fighter.hp)/self.fighter.base_max_hp))
+            if (self.fighter is not None and (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2):
+                blooddrop = Object(self.x, self.y, '.', 'Droplet of blood', libtcod.red, always_visible=False, z=BLOODDROP_Z_VAL)
+                objects.append(blooddrop)
+
             self.x += dx
             self.y += dy
 
@@ -157,12 +175,14 @@ class Object:
         # return to distance to some coordinates
         return math.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
 
+    # CURRENTLY UNUSED
     # make this object be drawn first, so all others appear above it if they're in the same tile
     def send_to_back(self):
         global objects
         objects.remove(self)
         objects.insert(0, self)
 
+    # CURRENTLY UNUSED
     # make this object be drawn last, so all others appear below it if they're in the same tile
     def send_to_front(self):
         global objects
@@ -213,8 +233,9 @@ class Object:
             x, y = libtcod.path_walk(my_path, True)
             if x or y:
                 # Set self's coordinates to the next path tile
-                self.x = x
-                self.y = y
+                # self.x = x
+                # self.y = y
+                self.move(x - self.x, y - self.y)
 
         else:
             # keep the old move function as a backup so that if there are no paths (for example, another monster blocks a corridor)
@@ -514,9 +535,9 @@ def make_map():
             num_rooms += 1
 
     # create stairs at the center of the last room
-    stairs = Object(new_x, new_y, '>', 'stairs', libtcod.white, always_visible=True)
+    stairs = Object(new_x, new_y, '>', 'stairs', libtcod.white, always_visible=True, z=STAIRS_Z_VAL)
     objects.append(stairs)
-    stairs.send_to_back() #so it's drawn below the monsters
+    # stairs.send_to_back() #so it's drawn below the monsters
 
     #########################################################################################
     # DEBUG: Print chance of each monster spawning
@@ -612,15 +633,15 @@ def place_objects(room):
             if choice == 'terminatron':
                 fighter_component = Fighter(hp=100, defense=5, melee_power=10, xp=10000, death_function=monster_death)
                 ai_component = BasicMonster()
-                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component)
+                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
                 fighter_component = Fighter(hp=15, defense=1, melee_power=4, xp=100, death_function=monster_death)
                 ai_component = BasicMonster()
-                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component)
+                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
                 fighter_component = Fighter(hp=10, defense=0, melee_power=2, xp=35, death_function=monster_death)
                 ai_component = BasicMonster()
-                monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component)
+                monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
             objects.append(monster)
 
@@ -638,34 +659,34 @@ def place_objects(room):
             if choice == 'heal':
                 # create a health pack
                 item_component = Item(use_function=cast_heal)
-                item = Object(x, y, '+', 'Health Pack', libtcod.violet, item=item_component, always_visible=True)
+                item = Object(x, y, '+', 'Health Pack', libtcod.violet, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'lightning':
                 # create a lightning device
                 item_component = Item(use_function=cast_lightning)
-                item = Object(x, y, '#', 'Lightning Device', libtcod.light_blue, item=item_component, always_visible=True)
+                item = Object(x, y, '#', 'Lightning Device', libtcod.light_blue, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'emp':
                 # create an emp device
                 item_component = Item(use_function=cast_EMP_device)
-                item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True)
+                item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'impact_grenade':
                 # create an impact grenade
                 item_component = Item(use_function=cast_impact_grenade)
-                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True)
+                item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
-                item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True)
+                item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
-                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
+                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm_ammo':
                 # create a 10mm_ammo
                 item_component = Item()
-                item = Object(x, y, '"', '10mm_ammo', libtcod.gray, item=item_component, always_visible=True)
+                item = Object(x, y, '\'', '10mm_ammo', libtcod.gray, item=item_component, always_visible=True, z=ITEM_Z_VAL)
 
             objects.append(item)
-            item.send_to_back() # items appear below other objects
+            # item.send_to_back() # items appear below other objects
 
 # render a bar (HP, experience, etc). first calculate the width of the bar
 def render_bar(x, y, total_width, name, value, maximum, bar_color, back_color):
@@ -743,7 +764,8 @@ def render_all():
                     map[x][y].explored = True
  
     # draw all objects in the list except player and reticule
-    for object in objects:
+    objects_sorted = sorted(objects, key=lambda x: x.z, reverse=False)
+    for object in objects_sorted:
         if object != player or object != reticule:
             object.draw()
     player.draw() # draw the player object
@@ -916,7 +938,8 @@ def monster_death(monster):
      monster.fighter = None
      monster.ai = None
      monster.name = 'remains of ' + monster.name
-     monster.send_to_back()
+     monster.z = CORPSE_Z_VAL
+     # monster.send_to_back()
 
 # define a menu window. Has a string at the top (header), list of strings (options. can be names of items, for ex), and the window's width (width)
 def menu(header, options, width):
@@ -1024,9 +1047,9 @@ def take_aim():
     else:
         (x, y) = (player.x+1, player.y)
 
-    reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True)
+    reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
     objects.append(reticule)
-    reticule.send_to_front()
+    # reticule.send_to_front()
     game_state = "aiming"
     message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
 
@@ -1104,19 +1127,43 @@ def cast_shoot(dx, dy):
     monsterFound = False
 
     if right_weapon != None and right_weapon.is_ranged:
-        (x, y) = (dx, dy)
-        if x is None: return 'cancelled'
+        if dx is None: return 'cancelled'
 
         if right_weapon.ammo > 0:
             right_weapon.ammo -= 1
-            for obj in objects: # damage fighter at target_tile()
-                if (obj.x, obj.y) == (x, y) and obj.fighter:
-                    monsterFound = True
-                    message('The ' + obj.name + ' is shot for ' + str(player.fighter.ranged_power) + ' hit points.', libtcod.orange)
-                    obj.fighter.take_damage(player.fighter.ranged_power)
-            # No monster was found at tile shot at
-            if monsterFound == False: 
-                message('You shoot the floor. Sick.', libtcod.red)
+            # slope between player and reticule
+            m_x = dx - player.x
+            m_y = dy - player.y
+
+            hasHit = False
+            while (hasHit is False):
+                # check if player shot themselves
+                if (player.x == dx and player.y == dy):
+                    message(player.name + ' shoots themselves for ' + str(player.fighter.ranged_power) + ' hit points!', libtcod.red)
+                    player.fighter.take_damage(player.fighter.ranged_power)
+                    break
+
+                libtcod.line_init(player.x, player.y, dx, dy)
+                x, y = libtcod.line_step()
+
+                while (x is not None):
+                    if is_blocked(x, y): # if bullet hits a blocked tile at x, y
+                        hasHit = True
+                        for obj in objects: # damage fighter at tile x, y
+                            if (obj.x, obj.y) == (x, y) and obj.fighter:
+                                monsterFound = True
+                                message('The ' + obj.name + ' is shot for ' + str(player.fighter.ranged_power) + ' hit points.', libtcod.orange)
+                                obj.fighter.take_damage(player.fighter.ranged_power)
+                                break
+                        if monsterFound == False:
+                            message('The shot misses any meaningful target.', libtcod.red)
+                        break
+                    else:
+                        x, y = libtcod.line_step()
+                
+                dx = dx + m_x
+                dy = dy + m_y
+
         else:
             message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
             return 'cancelled'
@@ -1375,7 +1422,7 @@ def new_game():
 
     #create object representing the player
     fighter_component = Fighter(hp=30, defense=0, melee_power=2, xp=0, death_function=player_death)
-    player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component)
+    player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
     
@@ -1401,10 +1448,10 @@ def new_game():
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
-    #equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
-    #obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True)
-    #inventory.append(obj)
-    #equipment_component.equip()
+    equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    inventory.append(obj)
+    equipment_component.equip()
 
     # # initial equipment: a dagger
     #equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
