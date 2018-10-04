@@ -38,7 +38,8 @@ ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
 
 # Experience and level-ups
-LEVEL_UP_BASE = 200
+## TODO: Return back to normal (200)
+LEVEL_UP_BASE = 200000
 LEVEL_UP_FACTOR = 150
 
 # spell values
@@ -49,9 +50,14 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
-FISTS_DAMAGE = 0
+
+## Fixed Weapon Values
+# Pistol
 PISTOL_RANGED_DAMAGE = 5
 PISTOL_MELEE_DAMAGE = 1
+PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
+
+# Dagger
 DAGGER_DAMAGE = 3
  
 FOV_ALGO = 0  #default FOV algorithm
@@ -386,7 +392,7 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_power_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_power_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
         self.melee_power_bonus = melee_power_bonus
         self.ranged_power_bonus = ranged_power_bonus
@@ -396,6 +402,7 @@ class Equipment:
         self.is_ranged = is_ranged
         self.max_ammo = ammo
         self.ammo = ammo
+        self.max_range = range
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -585,12 +592,53 @@ def random_choice(chances_dict):
 
     return strings[random_choice_index(chances)]
 
+# throw a single die of SIDES sides
+def d(sides):
+    return libtcod.random_get_int(0, 1, sides)
+
+# throw n dice of SIDES sides
+def roll_dice(n, sides):
+    vals = []
+    for i in range(n):
+        vals.append(d(sides))
+
+    print('DEBUG: Vals is ' + str(vals))
+    return vals
+
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
 def from_dungeon_level(table):
     for (value, level) in reversed(table):
         if dungeon_level >= level:
             return value
     return 0
+
+#############################
+## Item Creation Functions ##
+#############################
+
+# Create and return a pistol component
+def create_pistol_equipment():
+    return Equipment(slot='right hand', ammo=7, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+
+# Create and return a dagger component
+def create_dagger_equipment():
+    return Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
+
+################################
+## Monster Creation Functions ##
+################################
+
+# Create and return a teminatron fighter component
+def create_terminatron_fighter_component():
+    return Fighter(hp=100, defense=5, melee_power=10, xp=10000, death_function=monster_death)
+
+# Create and return a mecharachnid fighter component
+def create_mecharachnid_fighter_component():
+    return Fighter(hp=15, defense=1, melee_power=4, xp=100, death_function=monster_death)
+
+# Create and return a cyborg fighter component
+def create_cyborg_fighter_component():
+    return Fighter(hp=10, defense=0, melee_power=2, xp=35, death_function=monster_death)
 
 def place_objects(room):
     # this is where we decide the chance of each monster or item appearing
@@ -631,15 +679,15 @@ def place_objects(room):
         if not is_blocked(x, y):
             choice = random_choice(monster_chances)
             if choice == 'terminatron':
-                fighter_component = Fighter(hp=100, defense=5, melee_power=10, xp=10000, death_function=monster_death)
+                fighter_component = create_terminatron_fighter_component()
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
-                fighter_component = Fighter(hp=15, defense=1, melee_power=4, xp=100, death_function=monster_death)
+                fighter_component = create_mecharachnid_fighter_component()
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
-                fighter_component = Fighter(hp=10, defense=0, melee_power=2, xp=35, death_function=monster_death)
+                fighter_component = create_cyborg_fighter_component()
                 ai_component = BasicMonster()
                 monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
@@ -674,11 +722,11 @@ def place_objects(room):
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'dagger':
                 # create an energy dagger
-                equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
+                equipment_component = create_dagger_equipment()
                 item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
-                equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+                equipment_component = create_pistol_equipment()
                 item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm_ammo':
                 # create a 10mm_ammo
@@ -779,7 +827,11 @@ def render_all():
             if (x == reticule.x and y == reticule.y):
                 break
             #set the color and then draw the character that represents this object at its position
-            libtcod.console_set_default_foreground(con, reticule.color)
+            #if a segment intersects with a blocking tile, color it red
+            if (is_blocked(x, y) or not libtcod.map_is_in_fov(fov_map, x, y)):
+                libtcod.console_set_default_foreground(con, libtcod.red)
+            else:
+                libtcod.console_set_default_foreground(con, reticule.color)
             libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
             x, y = libtcod.line_step()
  
@@ -1049,7 +1101,6 @@ def take_aim():
 
     reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
     objects.append(reticule)
-    # reticule.send_to_front()
     game_state = "aiming"
     message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
 
@@ -1134,7 +1185,7 @@ def cast_shoot(dx, dy):
             # slope between player and reticule
             m_x = dx - player.x
             m_y = dy - player.y
-
+            
             hasHit = False
             while (hasHit is False):
                 # check if player shot themselves
@@ -1448,7 +1499,7 @@ def new_game():
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
-    equipment_component = Equipment(slot='right hand', ammo=7, is_ranged=True, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+    equipment_component = create_pistol_equipment()
     obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()

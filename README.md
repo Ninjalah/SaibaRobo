@@ -5,7 +5,9 @@ Cyberpunk Roguelike Action
 * **Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
 
 * **General**
-  * **TODO**: Add blood droplets when Fighters take minor (non-lethal) damage
+  * **FINISHED**: Add blood droplets when Fighters take minor (non-lethal) damage
+    * Fighters bleed when moving and under 20% HP.
+  * **TODO**: Add a **chance** to bleed each time an injured Fighter moves.
   * **TODO**: Add a special message for if Player shoots and kills themselves
   * **TODO**: Leveling system currently broken due to Stat mismatch
 
@@ -19,7 +21,7 @@ Cyberpunk Roguelike Action
 
 * **Aiming System**
   * Currently the aiming system is based on FOV
-  * **TODO**: Update aiming system so that bullets follow along a path, and hits anything that blocks before reaching reticule (walls, enemies, etc.)
+  * **FINISHED**: Update aiming system so that bullets follow along a path, and hits anything that blocks before reaching reticule (walls, enemies, etc.)
 
 * **Weapons**
   * **TODO**: Take only the necessary ammo from an ammo clip. If ammo clip has 0 rounds in it, discard from inventory automatically.
