@@ -53,7 +53,7 @@ IMPACT_GRENADE_DAMAGE = 12
 
 ## Fixed Weapon Values
 # Pistol
-PISTOL_RANGED_DAMAGE = 5
+PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = 1
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
 
@@ -254,12 +254,11 @@ class Object:
 
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
-    def __init__(self, hp, defense, xp, melee_power=0, ranged_power=0, death_function=None):
+    def __init__(self, hp, defense, xp, melee_power=0, death_function=None):
         self.base_max_hp = hp
         self.hp = hp
         self.base_defense = defense
         self.base_melee_power = melee_power
-        self.base_ranged_power = ranged_power
         self.xp = xp
         self.death_function = death_function
 
@@ -268,11 +267,6 @@ class Fighter:
     def melee_power(self):
         bonus = sum(equipment.melee_power_bonus for equipment in get_all_equipped(self.owner))
         return self.base_melee_power + bonus
-
-    @property
-    def ranged_power(self):
-        bonus = sum(equipment.ranged_power_bonus for equipment in get_all_equipped(self.owner))
-        return self.base_ranged_power + bonus
 
     @property
     def defense(self):
@@ -392,10 +386,10 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_power_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_damage=None, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
         self.melee_power_bonus = melee_power_bonus
-        self.ranged_power_bonus = ranged_power_bonus
+        self.ranged_damage = ranged_damage
         self.defense_bonus = defense_bonus
         self.max_hp_bonus = max_hp_bonus
         self.is_equipped = False
@@ -547,26 +541,26 @@ def make_map():
     # stairs.send_to_back() #so it's drawn below the monsters
 
     #########################################################################################
-    # DEBUG: Print chance of each monster spawning
+    # DEBUG: Print chance of each monster spawning #
     print('------- Dungeon_Level: ' + str(dungeon_level) + ' -------')
-    mon_sum = 0
-    for key, value in monster_chances.iteritems():
-        print('Adding chance val of ' + str(value) + ' to spawn: ' + key)
-        mon_sum += value
-    print('Total val: ' + str(mon_sum))
+    #mon_sum = 0
+    #for key, value in monster_chances.iteritems():
+        #print('Adding chance val of ' + str(value) + ' to spawn: ' + key)
+        #mon_sum += value
+    #print('Total val: ' + str(mon_sum))
     
-    for key, value in monster_chances.iteritems():
-        print('Chance of ' + key + ' to spawn: ' + str((float(value) / mon_sum) * 100))
+    #for key, value in monster_chances.iteritems():
+        #print('Chance of ' + key + ' to spawn: ' + str((float(value) / mon_sum) * 100))
 
     # DEBUG: Print chance of each item spawning
-    item_sum = 0
-    for key, value in item_chances.iteritems():
-        print('Adding chance val of ' + str(value) + ' to spawn: ' + key)
-        item_sum += value
-    print('Total val: ' + str(item_sum))
+    #item_sum = 0
+    #for key, value in item_chances.iteritems():
+        #print('Adding chance val of ' + str(value) + ' to spawn: ' + key)
+        #item_sum += value
+    #print('Total val: ' + str(item_sum))
 
-    for key, value in item_chances.iteritems():
-        print('Chance of ' + key + ' to spawn: ' + str((float(value) / item_sum) * 100))
+    #for key, value in item_chances.iteritems():
+        #print('Chance of ' + key + ' to spawn: ' + str((float(value) / item_sum) * 100))
     ##########################################################################################
 
 # choose one option from list of chances, returning its index
@@ -597,10 +591,11 @@ def d(sides):
     return libtcod.random_get_int(0, 1, sides)
 
 # throw n dice of SIDES sides
-def roll_dice(n, sides):
+def roll_dice(dmg_str):
+    arr = dmg_str.split('d')
     vals = []
-    for i in range(n):
-        vals.append(d(sides))
+    for i in range(int(arr[0])):
+        vals.append(d(int(arr[1])))
 
     print('DEBUG: Vals is ' + str(vals))
     return vals
@@ -618,7 +613,7 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='right hand', ammo=7, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_power_bonus=PISTOL_RANGED_DAMAGE)
+    return Equipment(slot='right hand', ammo=99, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE)
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -638,7 +633,7 @@ def create_mecharachnid_fighter_component():
 
 # Create and return a cyborg fighter component
 def create_cyborg_fighter_component():
-    return Fighter(hp=10, defense=0, melee_power=2, xp=35, death_function=monster_death)
+    return Fighter(hp=8, defense=0, melee_power=2, xp=35, death_function=monster_death)
 
 def place_objects(room):
     # this is where we decide the chance of each monster or item appearing
@@ -1181,6 +1176,10 @@ def cast_shoot(dx, dy):
         if dx is None: return 'cancelled'
 
         if right_weapon.ammo > 0:
+            totalDamage = 0
+            damage_list = roll_dice(right_weapon.ranged_damage)
+            for dmg in damage_list:
+                totalDamage += dmg
             right_weapon.ammo -= 1
             # slope between player and reticule
             m_x = dx - player.x
@@ -1190,8 +1189,8 @@ def cast_shoot(dx, dy):
             while (hasHit is False):
                 # check if player shot themselves
                 if (player.x == dx and player.y == dy):
-                    message(player.name + ' shoots themselves for ' + str(player.fighter.ranged_power) + ' hit points!', libtcod.red)
-                    player.fighter.take_damage(player.fighter.ranged_power)
+                    message(player.name + ' shoots themselves for ' + str(totalDamage) + ' hit points!', libtcod.red)
+                    player.fighter.take_damage(totalDamage)
                     break
 
                 libtcod.line_init(player.x, player.y, dx, dy)
@@ -1203,8 +1202,8 @@ def cast_shoot(dx, dy):
                         for obj in objects: # damage fighter at tile x, y
                             if (obj.x, obj.y) == (x, y) and obj.fighter:
                                 monsterFound = True
-                                message('The ' + obj.name + ' is shot for ' + str(player.fighter.ranged_power) + ' hit points.', libtcod.orange)
-                                obj.fighter.take_damage(player.fighter.ranged_power)
+                                message('The ' + obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                                obj.fighter.take_damage(totalDamage)
                                 break
                         if monsterFound == False:
                             message('The shot misses any meaningful target.', libtcod.red)
@@ -1400,10 +1399,14 @@ def handle_keys():
 
             if key_char == 'c':
                 # show character stats
+                right_weapon = get_equipped_in_slot('right hand')
+                ranged_damage_str = 'None'
+                if (right_weapon is not None):
+                    ranged_damage_str = right_weapon.ranged_damage
                 level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
                 msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
                     '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
-                    '\nMelee Attack: ' + str(player.fighter.melee_power) + '\nRanged Attack: ' + str(player.fighter.ranged_power) +
+                    '\nMelee Attack: ' + str(player.fighter.melee_power) + '\nRanged Damage: ' + ranged_damage_str +
                      '\nDefense: ' + str(player.fighter.defense), CHARACTER_SCREEN_WIDTH)
 
             if key_char == 'r':
