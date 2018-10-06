@@ -62,7 +62,7 @@ DAGGER_DAMAGE = 3
  
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
-TORCH_RADIUS = 10
+TORCH_RADIUS = 20
  
 LIMIT_FPS = 60  #60 frames-per-second maximum
  
@@ -143,9 +143,7 @@ class Object:
     def move(self, dx, dy):
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
-            print(self.name + ' is moving!')
 
-            print(self.name + ' hp / max hp: ' + str(float(self.fighter.hp)/self.fighter.base_max_hp))
             if (self.fighter is not None and (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2):
                 blooddrop = Object(self.x, self.y, '.', 'Droplet of blood', libtcod.red, always_visible=False, z=BLOODDROP_Z_VAL)
                 objects.append(blooddrop)
@@ -443,6 +441,13 @@ def is_blocked(x, y):
             return True
 
     return False
+
+# returns an object by tile
+def get_object_by_tile(x, y):
+    for obj in objects:
+        if (obj.x, obj.y) == (x, y):
+            return obj
+    return None
  
 def create_room(room):
     global map
@@ -597,7 +602,6 @@ def roll_dice(dmg_str):
     for i in range(int(arr[0])):
         vals.append(d(int(arr[1])))
 
-    print('DEBUG: Vals is ' + str(vals))
     return vals
 
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
@@ -1169,6 +1173,8 @@ def cast_impact_grenade():
 
 # shoot the weapon in your right hand at tile (dx, dy)
 def cast_shoot(dx, dy):
+    remove_reticule()
+    render_all()
     right_weapon = get_equipped_in_slot('right hand')
     monsterFound = False
 
@@ -1184,33 +1190,58 @@ def cast_shoot(dx, dy):
             # slope between player and reticule
             m_x = dx - player.x
             m_y = dy - player.y
-            
+            # starting x and y
+            start_x = player.x
+            start_y = player.y
+
+            # check if player shot themselves
+            if (player.x == dx and player.y == dy):
+                message(player.name + ' shoots themselves for ' + str(totalDamage) + ' hit points!', libtcod.red)
+                player.fighter.take_damage(totalDamage)
+                return # exit the function
+
+            # Find furthest blocking tile
             hasHit = False
+            
             while (hasHit is False):
-                # check if player shot themselves
-                if (player.x == dx and player.y == dy):
-                    message(player.name + ' shoots themselves for ' + str(totalDamage) + ' hit points!', libtcod.red)
-                    player.fighter.take_damage(totalDamage)
-                    break
-
-                libtcod.line_init(player.x, player.y, dx, dy)
+                libtcod.line_init(start_x, start_y, dx, dy)
                 x, y = libtcod.line_step()
-
                 while (x is not None):
-                    if is_blocked(x, y): # if bullet hits a blocked tile at x, y
+                    libtcod.console_set_default_foreground(con, libtcod.red)
+                    #if libtcod.map_is_in_fov(fov_map, x, y):
+                    libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                    libtcod.console_flush()
+                    sleep(.1)
+                    if (is_blocked(x, y)): # if bullet hits a blocked tile at x, y
+                        #if libtcod.map_is_in_fov(fov_map, x, y):
+                        libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                        libtcod.console_flush()
+                        sleep(.1)
+                        hit_obj = get_object_by_tile(x, y)
                         hasHit = True
-                        for obj in objects: # damage fighter at tile x, y
-                            if (obj.x, obj.y) == (x, y) and obj.fighter:
-                                monsterFound = True
-                                message('The ' + obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
-                                obj.fighter.take_damage(totalDamage)
-                                break
-                        if monsterFound == False:
+                        if hit_obj and hit_obj.fighter:
+                            monsterFound = True
+                            message('The ' + hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                            hit_obj.fighter.take_damage(totalDamage)
+                            break
+                        if monsterFound is False:
                             message('The shot misses any meaningful target.', libtcod.red)
                         break
                     else:
+                        libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                        # redraws objs if a bullet is shot over them
+                        obj = get_object_by_tile(x, y)
+                        if obj is not None:
+                            obj.draw()
                         x, y = libtcod.line_step()
-                
+                if (x is not None): # delete bullet char from spot hit
+                    libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                # bullet reached reticule, extend reticule
+                start_x = dx
+                start_y = dy
                 dx = dx + m_x
                 dy = dy + m_y
 
@@ -1322,10 +1353,8 @@ def handle_keys():
             # shoot if Player presses F while aiming
             if key_char == 'f':
                 if cast_shoot(reticule.x, reticule.y) is not 'cancelled':
-                    remove_reticule()
                     return 'turn-taken'
                 else:
-                    remove_reticule()
                     return 'didnt-take-turn'
             elif key_char is not 'f' and key.c is not 0 and key.vk is not 0:
                 remove_reticule()
