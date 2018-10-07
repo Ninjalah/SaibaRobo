@@ -62,7 +62,7 @@ DAGGER_DAMAGE = 3
  
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
-TORCH_RADIUS = 20
+TORCH_RADIUS = 10
  
 LIMIT_FPS = 60  #60 frames-per-second maximum
  
@@ -332,6 +332,7 @@ class ConfusedMonster:
     def take_turn(self):
         if self.num_turns > 0: # monster still confused...
             # move in a random direction, and decrease the number of turns confused
+            self.owner.clear()
             self.owner.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
             self.num_turns -= 1
         else: # restore the previous AI (this one will be deleted because it's not referenced anymore)
@@ -1141,6 +1142,7 @@ def cast_lightning():
     monster.fighter.take_damage(LIGHTNING_DAMAGE)
 
 # find closest enemy in-range and confuse it
+# TODO: When EMP is used and cast_shoot(), ghost images exist
 def cast_EMP_device():
     # confuse all monsters within a radius
     monsters = []
@@ -1212,13 +1214,13 @@ def cast_shoot(dx, dy):
                     libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
-                    sleep(.1)
+                    sleep(.03)
                     if (is_blocked(x, y)): # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                         libtcod.console_flush()
-                        sleep(.1)
+                        sleep(.03)
                         hit_obj = get_object_by_tile(x, y)
                         hasHit = True
                         if hit_obj and hit_obj.fighter:
@@ -1535,6 +1537,9 @@ def new_game():
     obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
+    item_component = Item(use_function=cast_EMP_device)
+    item = Object(0, 0, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+    inventory.append(item)
 
     # # initial equipment: a dagger
     #equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
