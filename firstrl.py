@@ -43,7 +43,7 @@ LEVEL_UP_BASE = 200000
 LEVEL_UP_FACTOR = 150
 
 # spell values
-HEAL_AMOUNT = 10
+HEAL_AMOUNT = 35
 LIGHTNING_DAMAGE = 20
 LIGHTNING_RANGE = 5
 CONFUSE_NUM_TURNS = 10
@@ -52,6 +52,8 @@ IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
 
 ## Fixed Weapon Values
+PROJECTILE_SLEEP_TIME = 0.04
+
 # Pistol
 PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = 1
@@ -143,7 +145,7 @@ class Object:
     def move(self, dx, dy):
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
-
+            self.clear()
             if (self.fighter is not None and (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2):
                 blooddrop = Object(self.x, self.y, '.', 'Droplet of blood', libtcod.red, always_visible=False, z=BLOODDROP_Z_VAL)
                 objects.append(blooddrop)
@@ -307,8 +309,8 @@ class Fighter:
         if self.hp > self.base_max_hp:
             self.hp = self.base_max_hp
 
-# AI for basic monsters
-class BasicMonster:
+# AI for melee monsters (chase, no ranged)
+class MeleeMonster:
     def take_turn(self):
         # a basic monster takes its turn. If you can see it, it can see you
         monster = self.owner
@@ -322,6 +324,61 @@ class BasicMonster:
             # close enough, attack! (if the player is still alive)
             elif player.fighter.hp > 0:
                 monster.fighter.attack(player)
+
+# AI for Cyborgs (ranged)
+class CyborgAI:
+    def take_turn(self):
+        if player.fighter.hp > 0:
+            render_all()
+            monster = self.owner
+            if libtcod.map_is_in_fov(fov_map, monster.x, monster.y): # if Cyborg sees Player, chance to fire/move
+                if is_line_blocked_by_wall(monster.x, monster.y, player.x, player.y) is False:
+                    atk_chance = libtcod.random_get_int(0, 1, 100)
+
+                    if atk_chance < 75: #chance to fire weapon, 75%
+                        totalDamage = 0
+                        damageList = roll_dice('2d4')
+                        for dmg in damageList:
+                            totalDamage += dmg
+                        libtcod.line_init(monster.x, monster.y, player.x, player.y)
+                        x, y = libtcod.line_step()
+                        while (x is not None):
+                            libtcod.console_set_default_foreground(con, libtcod.red)
+                            #if libtcod.map_is_in_fov(fov_map, x, y):
+                            libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            libtcod.console_flush()
+                            sleep(PROJECTILE_SLEEP_TIME)
+                            if (is_blocked(x, y)): # if bullet hits a blocked tile at x, y
+                                #if libtcod.map_is_in_fov(fov_map, x, y):
+                                libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                libtcod.console_flush()
+                                sleep(PROJECTILE_SLEEP_TIME)
+                                hit_obj = get_object_by_tile(x, y)
+                                #hasHit = True
+                                if hit_obj and hit_obj.fighter:
+                                    #monsterFound = True
+                                    message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                                    hit_obj.fighter.take_damage(totalDamage)
+                                    break
+                                break
+                            else:
+                                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                                # redraws objs if a bullet is shot over them
+                                obj = get_object_by_tile(x, y)
+                                if obj is not None:
+                                    obj.draw()
+                                x, y = libtcod.line_step()
+                        if (x is not None): # delete bullet char from spot hit
+                            libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                    else: # chance to move, 25%
+                        #monster.clear()
+                        monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+                else: # if Cyborg doesn't see player, move
+                    #monster.clear()
+                    monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
 # AI for a temporarily confused monster (reverts to previous AI after a while).
 class ConfusedMonster:
@@ -441,6 +498,16 @@ def is_blocked(x, y):
         if object.blocks and object.x == x and object.y == y:
             return True
 
+    return False
+
+# tests if a line has at least one segment blocked, excluding objects
+def is_line_blocked_by_wall(x1, y1, x2, y2):
+    libtcod.line_init(x1, y1, x2, y2)
+    x, y = libtcod.line_step()
+    while (x is not None):
+        if (is_blocked(x, y) and (x != x2 and y != y2) and get_object_by_tile(x, y) is None):
+            return True
+        x, y = libtcod.line_step()
     return False
 
 # returns an object by tile
@@ -630,11 +697,11 @@ def create_dagger_equipment():
 
 # Create and return a teminatron fighter component
 def create_terminatron_fighter_component():
-    return Fighter(hp=100, defense=5, melee_power=10, xp=10000, death_function=monster_death)
+    return Fighter(hp=100, defense=5, melee_power=25, xp=10000, death_function=monster_death)
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
-    return Fighter(hp=15, defense=1, melee_power=4, xp=100, death_function=monster_death)
+    return Fighter(hp=15, defense=1, melee_power=8, xp=100, death_function=monster_death)
 
 # Create and return a cyborg fighter component
 def create_cyborg_fighter_component():
@@ -680,15 +747,15 @@ def place_objects(room):
             choice = random_choice(monster_chances)
             if choice == 'terminatron':
                 fighter_component = create_terminatron_fighter_component()
-                ai_component = BasicMonster()
+                ai_component = MeleeMonster()
                 monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
                 fighter_component = create_mecharachnid_fighter_component()
-                ai_component = BasicMonster()
+                ai_component = MeleeMonster()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
                 fighter_component = create_cyborg_fighter_component()
-                ai_component = BasicMonster()
+                ai_component = CyborgAI()
                 monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
             objects.append(monster)
@@ -983,15 +1050,21 @@ def player_death(player):
 
 # transform into a nasty corpse! it doesn't block, can't be attacked, and doesn't move
 def monster_death(monster):
-     message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
-     monster.char = '%'
-     monster.color = libtcod.dark_red
-     monster.blocks = False
-     monster.fighter = None
-     monster.ai = None
-     monster.name = 'remains of ' + monster.name
-     monster.z = CORPSE_Z_VAL
-     # monster.send_to_back()
+    message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
+    monster.char = '%'
+    monster.color = libtcod.dark_red
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remains of ' + monster.name
+    monster.z = CORPSE_Z_VAL
+
+    totalMonstersLeft = 0
+    for obj in objects:
+        if obj.fighter and obj != player:
+            totalMonstersLeft += 1
+    if (totalMonstersLeft == 0):
+        message('The halls become quiet...', libtcod.light_blue)
 
 # define a menu window. Has a string at the top (header), list of strings (options. can be names of items, for ex), and the window's width (width)
 def menu(header, options, width):
@@ -1209,23 +1282,26 @@ def cast_shoot(dx, dy):
                 libtcod.line_init(start_x, start_y, dx, dy)
                 x, y = libtcod.line_step()
                 while (x is not None):
-                    libtcod.console_set_default_foreground(con, libtcod.red)
+                    if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT)
+                        libtcod.console_set_default_foreground(con, libtcod.sky)
+                    else:
+                        libtcod.console_set_default_foreground(con, libtcod.red)
                     #if libtcod.map_is_in_fov(fov_map, x, y):
                     libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
-                    sleep(.03)
+                    sleep(PROJECTILE_SLEEP_TIME)
                     if (is_blocked(x, y)): # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                         libtcod.console_flush()
-                        sleep(.03)
+                        sleep(PROJECTILE_SLEEP_TIME)
                         hit_obj = get_object_by_tile(x, y)
                         hasHit = True
                         if hit_obj and hit_obj.fighter:
                             monsterFound = True
-                            message('The ' + hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                            message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
                             hit_obj.fighter.take_damage(totalDamage)
                             break
                         if monsterFound is False:
@@ -1506,7 +1582,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=30, defense=0, melee_power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=100, defense=0, melee_power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -1537,9 +1613,6 @@ def new_game():
     obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
-    item_component = Item(use_function=cast_EMP_device)
-    item = Object(0, 0, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
-    inventory.append(item)
 
     # # initial equipment: a dagger
     #equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
