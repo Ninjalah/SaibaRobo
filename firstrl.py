@@ -337,7 +337,7 @@ class CyborgAI:
                 if is_line_blocked_by_wall(monster.x, monster.y, player.x, player.y) is False:
                     atk_chance = libtcod.random_get_int(0, 1, 100)
 
-                    if atk_chance < 25: #chance to fire weapon, 75%
+                    if atk_chance < 75: #chance to fire weapon, 75%
                         totalDamage = 0
                         damageList = roll_dice('2d4')
                         for dmg in damageList:
@@ -345,7 +345,12 @@ class CyborgAI:
                         libtcod.line_init(monster.x, monster.y, player.x, player.y)
                         x, y = libtcod.line_step()
                         while (x is not None):
-                            libtcod.console_set_default_foreground(con, libtcod.red)
+                            if totalDamage == 8:
+                                libtcod.console_set_default_foreground(con, libtcod.sky)
+                            elif totalDamage == 2:
+                                libtcod.console_set_default_foreground(con, libtcod.red)
+                            else:
+                                libtcod.console_set_default_foreground(con, libtcod.white)
                             #if libtcod.map_is_in_fov(fov_map, x, y):
                             libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
                             libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
