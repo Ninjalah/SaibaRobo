@@ -113,12 +113,15 @@ class Rect:
 class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
-    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, z=0):
+    # TODO: Remove max_capacity from game? Currently no purpose.
+    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, z=0):
         self.x = x
         self.y = y
         self.z = z
         self.char = char
         self.color = color
+        self.capacity = capacity
+        self.max_capacity = max_capacity
         self.name = name
         self.blocks = blocks
         self.always_visible = always_visible
@@ -254,12 +257,14 @@ class Object:
 
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
-    def __init__(self, hp, defense, xp, melee_power=0, death_function=None):
+    def __init__(self, hp, defense, xp, melee_power=0, ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None):
         self.base_max_hp = hp
         self.hp = hp
         self.base_defense = defense
         self.base_melee_power = melee_power
         self.xp = xp
+        self.ten_mm_rounds = ten_mm_rounds
+        self.max_ten_mm_rounds = max_ten_mm_rounds
         self.death_function = death_function
 
     # return actual power, by summing up the bonuses from all equipped items
@@ -422,7 +427,20 @@ class Item:
 
     def pick_up(self):
         # add to the player's inventory and remove from map
-        if len(inventory) >= 26: # limited to 26 as there are 26 letters in the alphabet, A - Z
+        if self.owner.capacity is not None: # if ammo, add to player's ammo
+            if "10mm" in self.owner.name: # if the item we're picking up is 10mm ammo
+                amount_to_pickup = player.fighter.max_ten_mm_rounds - player.fighter.ten_mm_rounds
+                if amount_to_pickup > 0: # if we can pick up some ammo
+                    if self.owner.capacity > amount_to_pickup: # we can pick up some ammo, but not all
+                        player.fighter.ten_mm_rounds += amount_to_pickup
+                        self.owner.capacity -= amount_to_pickup
+                    else: # we can pick up all ammo and delete obj
+                        player.fighter.ten_mm_rounds += self.owner.capacity
+                        objects.remove(self.owner)
+                    message('Picked up some 10mm ammo!', libtcod.green)
+                else: # we're full on ammo
+                    message('You cannot pick up any more 10mm ammo.', libtcod.yellow)
+        elif len(inventory) >= 26: # limited to 26 as there are 26 letters in the alphabet, A - Z
             message('Your inventory is full, cannot pick up ' + self.owner.name + '.', libtcod.yellow)
         else:
             inventory.append(self.owner)
@@ -785,7 +803,7 @@ def cyborg_death(monster):
     ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and ammo_drop_chance < 50:
         item_component = Item()
-        item = Object(x, y, '\'', '10mm_ammo', libtcod.gray, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+        item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
         objects.append(item)
 
     # drop pistol on death
@@ -812,12 +830,12 @@ def cyborg_death(monster):
     if (totalMonstersLeft == 0):
         message('The halls become quiet...', libtcod.light_blue)
 
+# this is where we decide the chance of each monster or item appearing
 def place_objects(room):
-    # this is where we decide the chance of each monster or item appearing
     global monster_chances, item_chances
 
     # max number of monsters per room
-    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]]) # TODO: DEBUG: 15 was 2 here
+    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
 
     # chance of each mosnter
     monster_chances = {}
@@ -836,7 +854,7 @@ def place_objects(room):
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[10, 1]])
-    item_chances['10mm_ammo'] = from_dungeon_level([[15, 1]])
+    item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -900,10 +918,10 @@ def place_objects(room):
                 # create a standard pistol
                 equipment_component = create_pistol_equipment()
                 item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
-            elif choice == '10mm_ammo':
+            elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
-                item = Object(x, y, '\'', '10mm_ammo', libtcod.gray, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
 
             objects.append(item)
             # item.send_to_back() # items appear below other objects
@@ -950,6 +968,10 @@ def display_equipment_info():
     else:
         libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Unarmed')    
 
+# get total ammo info and display
+def display_ammo_count():
+    libtcod.console_print_ex(panel, 1, 6, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
+
 # render game information to screen
 def render_all():
     global fov_map, color_dark_wall, color_light_wall
@@ -993,6 +1015,7 @@ def render_all():
     if reticule is not None:
         reticule.draw()
         libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
+        prev_x, prev_y = player.x, player.y
         x, y = libtcod.line_step()
         while (x is not None):
             #stop drawing line segments once we're at the reticule
@@ -1004,7 +1027,18 @@ def render_all():
                 libtcod.console_set_default_foreground(con, libtcod.red)
             else:
                 libtcod.console_set_default_foreground(con, reticule.color)
-            libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+            normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
+            if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
+                libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+            elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
+                libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
+            elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
+                libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
+            elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
+                libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
+            else: # TODO: DEBUG: this shouldn't be reached but if so, debug
+                libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
+            prev_x, prev_y = x, y
             x, y = libtcod.line_step()
  
     # blit the contents of "con" to the root console
@@ -1026,6 +1060,10 @@ def render_all():
 
     # show the player's equipment and ammo (if applicable)
     display_equipment_info()
+
+    # show the player's total ammo count
+    # TODO: Leverage for multiple ammo types
+    display_ammo_count()
 
     # display dungeon level to GUI
     libtcod.console_print_ex(panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
@@ -1213,6 +1251,7 @@ def inventory_menu(header):
         inventory.sort(key=lambda k: k.name, reverse=False)
         options = []
         for item in inventory:
+            # if equipment, show ammo. if not, show item name
             text = item.name + ' (' + str(item.equipment.ammo) + '/' + str(item.equipment.max_ammo) + ')' if (item.equipment and item.equipment.is_ranged) else item.name
             # show additional information, in case it's equipped
             if item.equipment and item.equipment.is_equipped:
@@ -1422,20 +1461,26 @@ def cast_shoot(dx, dy):
 # reload the weapon in your right hand
 def cast_reload():
     right_weapon = get_equipped_in_slot('right hand')
-    ammo_to_reload = find_in_inventory('10mm_ammo')
+    ammo_to_reload = player.fighter.ten_mm_rounds > 0
 
-    if right_weapon != None and right_weapon.is_ranged and right_weapon.ammo < right_weapon.max_ammo and ammo_to_reload != None:
+    if right_weapon != None and right_weapon.is_ranged and right_weapon.ammo < right_weapon.max_ammo and ammo_to_reload is True:
         message('You reload ' + right_weapon.owner.name + '!', libtcod.orange)
-        equipped = get_equipped_in_slot(right_weapon.slot)
-        equipped.ammo += equipped.max_ammo - equipped.ammo
-        remove_from_inventory('10mm_ammo')
+        amount_to_reload = right_weapon.max_ammo - right_weapon.ammo
+        if amount_to_reload > player.fighter.ten_mm_rounds: # if we can reload some but not all
+            right_weapon.ammo += player.fighter.ten_mm_rounds
+            player.fighter.ten_mm_rounds = 0
+        else: # we can reload to full
+            right_weapon.ammo += amount_to_reload
+            player.fighter.ten_mm_rounds -= amount_to_reload
+        #equipped = get_equipped_in_slot(right_weapon.slot)
+        #equipped.ammo += equipped.max_ammo - equipped.ammo
     elif right_weapon != None and right_weapon.is_ranged and right_weapon.ammo == right_weapon.max_ammo:
         message(right_weapon.owner.name + ' is already full of ammo!', libtcod.red)
         return 'cancelled'
     elif right_weapon == None:
         message('Nothing to reload!', libtcod.red)
         return 'cancelled'
-    elif ammo_to_reload == None:
+    elif ammo_to_reload is False:
         message('No ammo!', libtcod.red)
         return 'cancelled'
 
@@ -1674,7 +1719,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=100, defense=0, melee_power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=10000, defense=0, melee_power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
