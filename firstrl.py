@@ -33,7 +33,7 @@ PLAYER_Z_VAL = 5
 RETICULE_Z_VAL = 99
  
 # parameters for dungeon generator (num of monsters, items, etc.)
-ROOM_MAX_SIZE = 10
+ROOM_MAX_SIZE = 14
 ROOM_MIN_SIZE = 6
 MAX_ROOMS = 30
 
@@ -343,6 +343,7 @@ class CyborgAI:
                         for dmg in damageList:
                             totalDamage += dmg
                         libtcod.line_init(monster.x, monster.y, player.x, player.y)
+                        prev_x, prev_y = monster.x, monster.y
                         x, y = libtcod.line_step()
                         while (x is not None):
                             if totalDamage == 8:
@@ -352,7 +353,17 @@ class CyborgAI:
                             else:
                                 libtcod.console_set_default_foreground(con, libtcod.white)
                             #if libtcod.map_is_in_fov(fov_map, x, y):
-                            libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                            normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
+                            if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
+                                libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                            elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
+                                libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
+                            elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
+                                libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
+                            elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
+                                libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
+                            else: # TODO: DEBUG: this shouldn't be reached but if so, debug
+                                libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
                             libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                             libtcod.console_flush()
                             sleep(PROJECTILE_SLEEP_TIME)
@@ -376,6 +387,7 @@ class CyborgAI:
                                 obj = get_object_by_tile(x, y)
                                 if obj is not None:
                                     obj.draw()
+                                prev_x, prev_y = x, y
                                 x, y = libtcod.line_step()
                         if (x is not None): # delete bullet char from spot hit
                             libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
@@ -538,6 +550,10 @@ def get_fighter_by_tile(x, y):
         if (obj.x, obj.y) == (x, y) and obj.fighter:
             return obj
     return None
+
+# take two points, return the vector between them
+def point_to_point_vector(start_x, start_y, end_x, end_y):
+    return (end_x - start_x, end_y - start_y)
 
 def create_room(room):
     global map
@@ -1342,6 +1358,7 @@ def cast_shoot(dx, dy):
             
             while (hasHit is False):
                 libtcod.line_init(start_x, start_y, dx, dy)
+                prev_x, prev_y = start_x, start_y
                 x, y = libtcod.line_step()
                 while (x is not None):
                     if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT)
@@ -1351,7 +1368,17 @@ def cast_shoot(dx, dy):
                     else:
                         libtcod.console_set_default_foreground(con, libtcod.white)
                     #if libtcod.map_is_in_fov(fov_map, x, y):
-                    libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                    normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
+                    if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
+                        libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                    elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
+                        libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
+                    elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
+                        libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
+                    elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
+                        libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
+                    else: # TODO: DEBUG: this shouldn't be reached but if so, debug
+                        libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
@@ -1377,6 +1404,7 @@ def cast_shoot(dx, dy):
                         obj = get_object_by_tile(x, y)
                         if obj is not None:
                             obj.draw()
+                        prev_x, prev_y = x, y
                         x, y = libtcod.line_step()
                 if (x is not None): # delete bullet char from spot hit
                     libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
