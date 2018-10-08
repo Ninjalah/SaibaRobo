@@ -317,20 +317,22 @@ class Fighter:
 # AI for melee monsters (chase, no ranged)
 class MeleeMonster:
     def take_turn(self):
-        # a basic monster takes its turn. If monster sees player, chase
-        monster = self.owner
-        if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
+        # roll to see if monster moves
+        if libtcod.random_get_int(0, 1, 100) < 85:
+            # a basic monster takes its turn. If monster sees player, chase
+            monster = self.owner
+            if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
 
-            # move towards player if far away
-            if monster.distance_to(player) >= 2:
-                monster.clear()
-                monster.move_astar(player)
-            
-            # close enough, attack! (if the player is still alive)
-            elif player.fighter.hp > 0:
-                monster.fighter.attack(player)
-        else: # if monster doesn't see player, move randomly
-            monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+                # move towards player if far away
+                if monster.distance_to(player) >= 2:
+                    monster.clear()
+                    monster.move_astar(player)
+                
+                # close enough, attack! (if the player is still alive)
+                elif player.fighter.hp > 0:
+                    monster.fighter.attack(player)
+            else: # if monster doesn't see player, move randomly
+                monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
 # AI for Cyborgs (ranged)
 class CyborgAI:
