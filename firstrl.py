@@ -312,7 +312,7 @@ class Fighter:
 # AI for melee monsters (chase, no ranged)
 class MeleeMonster:
     def take_turn(self):
-        # a basic monster takes its turn. If you can see it, it can see you
+        # a basic monster takes its turn. If monster sees player, chase
         monster = self.owner
         if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
 
@@ -324,6 +324,8 @@ class MeleeMonster:
             # close enough, attack! (if the player is still alive)
             elif player.fighter.hp > 0:
                 monster.fighter.attack(player)
+        else: # if monster doesn't see player, move randomly
+            monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
 # AI for Cyborgs (ranged)
 class CyborgAI:
@@ -374,11 +376,11 @@ class CyborgAI:
                             libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
                             libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     else: # chance to move, 25%
-                        #monster.clear()
                         monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
-                else: # if Cyborg doesn't see player, move
-                    #monster.clear()
+                else: # if Cyborg sees player but can't shoot player, move
                     monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+            else: # if Cyborg doesn't see player, move
+                monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
 # AI for a temporarily confused monster (reverts to previous AI after a while).
 class ConfusedMonster:
@@ -510,10 +512,19 @@ def is_line_blocked_by_wall(x1, y1, x2, y2):
         x, y = libtcod.line_step()
     return False
 
+# finds a tile around (x, y) that is not blocked, and returns it
+def get_unblocked_tile_around(x, y):
+    foundUnblocked = False
+    while foundUnblocked is False:
+        (dx, dy) = (libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+        if is_blocked(dx + x, dy + y) is False:
+            return (dx + x, dy + y)
+
 # returns an object by tile
+# NOTE: Skips over REMAINS objects
 def get_object_by_tile(x, y):
     for obj in objects:
-        if (obj.x, obj.y) == (x, y):
+        if (obj.x, obj.y) == (x, y) and "remains" not in obj.name:
             return obj
     return None
  
@@ -685,7 +696,7 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='right hand', ammo=99, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE)
+    return Equipment(slot='right hand', ammo=7, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE)
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -697,22 +708,89 @@ def create_dagger_equipment():
 
 # Create and return a teminatron fighter component
 def create_terminatron_fighter_component():
-    return Fighter(hp=100, defense=5, melee_power=25, xp=10000, death_function=monster_death)
+    return Fighter(hp=100, defense=5, melee_power=25, xp=10000, death_function=basic_monster_death)
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
-    return Fighter(hp=15, defense=1, melee_power=8, xp=100, death_function=monster_death)
+    return Fighter(hp=15, defense=1, melee_power=8, xp=100, death_function=basic_monster_death)
 
 # Create and return a cyborg fighter component
 def create_cyborg_fighter_component():
-    return Fighter(hp=8, defense=0, melee_power=2, xp=35, death_function=monster_death)
+    return Fighter(hp=8, defense=0, melee_power=2, xp=35, death_function=cyborg_death)
+
+#############################
+## Fighter Death Functions ##
+#############################
+
+# ends game is player dies!
+def player_death(player):
+    global game_state
+    message('You died!', libtcod.red)
+    game_state = 'dead'
+
+    # for added effect, transform the player into a corpse!
+    player.char = '%'
+    player.color = libtcod.dark_red
+
+# transform into a nasty corpse! it doesn't block, can't be attacked, and doesn't move
+# NOTE: Generic monster death function
+def basic_monster_death(monster):
+    message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
+    monster.char = '%'
+    monster.color = libtcod.dark_red
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remains of ' + monster.name
+    monster.z = CORPSE_Z_VAL
+
+    totalMonstersLeft = 0
+    for obj in objects:
+        if obj.fighter and obj != player:
+            totalMonstersLeft += 1
+    if (totalMonstersLeft == 0):
+        message('The halls become quiet...', libtcod.light_blue)
+
+# Cyborg death function (drop ammo, weapon)
+def cyborg_death(monster):
+    # drop ammo on death
+    (x, y) = get_unblocked_tile_around(monster.x, monster.y)
+    ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
+    if x is not None and ammo_drop_chance < 50:
+        item_component = Item()
+        item = Object(x, y, '\'', '10mm_ammo', libtcod.gray, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+        objects.append(item)
+
+    # drop pistol on death
+    (x, y) = get_unblocked_tile_around(monster.x, monster.y)
+    pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
+    if x is not None and pistol_drop_chance < 25:
+        equipment_component = create_pistol_equipment()
+        item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+        objects.append(item)
+
+    message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
+    monster.char = '%'
+    monster.color = libtcod.dark_red
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remains of ' + monster.name
+    monster.z = CORPSE_Z_VAL
+
+    totalMonstersLeft = 0
+    for obj in objects:
+        if obj.fighter and obj != player:
+            totalMonstersLeft += 1
+    if (totalMonstersLeft == 0):
+        message('The halls become quiet...', libtcod.light_blue)
 
 def place_objects(room):
     # this is where we decide the chance of each monster or item appearing
     global monster_chances, item_chances
 
     # max number of monsters per room
-    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
+    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]]) # TODO: DEBUG: 15 was 2 here
 
     # chance of each mosnter
     monster_chances = {}
@@ -1038,34 +1116,6 @@ def get_all_equipped(obj):
     else:
         return [] # other objects have no equipment
 
-# ends game is player dies!
-def player_death(player):
-    global game_state
-    message('You died!', libtcod.red)
-    game_state = 'dead'
-
-    # for added effect, transform the player into a corpse!
-    player.char = '%'
-    player.color = libtcod.dark_red
-
-# transform into a nasty corpse! it doesn't block, can't be attacked, and doesn't move
-def monster_death(monster):
-    message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
-    monster.char = '%'
-    monster.color = libtcod.dark_red
-    monster.blocks = False
-    monster.fighter = None
-    monster.ai = None
-    monster.name = 'remains of ' + monster.name
-    monster.z = CORPSE_Z_VAL
-
-    totalMonstersLeft = 0
-    for obj in objects:
-        if obj.fighter and obj != player:
-            totalMonstersLeft += 1
-    if (totalMonstersLeft == 0):
-        message('The halls become quiet...', libtcod.light_blue)
-
 # define a menu window. Has a string at the top (header), list of strings (options. can be names of items, for ex), and the window's width (width)
 def menu(header, options, width):
     global key, mouse
@@ -1262,18 +1312,19 @@ def cast_shoot(dx, dy):
             for dmg in damage_list:
                 totalDamage += dmg
             right_weapon.ammo -= 1
-            # slope between player and reticule
-            m_x = dx - player.x
-            m_y = dy - player.y
-            # starting x and y
-            start_x = player.x
-            start_y = player.y
 
             # check if player shot themselves
             if (player.x == dx and player.y == dy):
                 message(player.name + ' shoots themselves for ' + str(totalDamage) + ' hit points!', libtcod.red)
                 player.fighter.take_damage(totalDamage)
                 return # exit the function
+
+            # slope between player and reticule
+            m_x = dx - player.x
+            m_y = dy - player.y
+            # starting x and y
+            start_x = player.x
+            start_y = player.y
 
             # Find furthest blocking tile
             hasHit = False
@@ -1284,8 +1335,10 @@ def cast_shoot(dx, dy):
                 while (x is not None):
                     if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT)
                         libtcod.console_set_default_foreground(con, libtcod.sky)
-                    else:
+                    elif (totalDamage == 2):
                         libtcod.console_set_default_foreground(con, libtcod.red)
+                    else:
+                        libtcod.console_set_default_foreground(con, libtcod.white)
                     #if libtcod.map_is_in_fov(fov_map, x, y):
                     libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
