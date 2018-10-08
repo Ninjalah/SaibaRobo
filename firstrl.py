@@ -337,7 +337,7 @@ class CyborgAI:
                 if is_line_blocked_by_wall(monster.x, monster.y, player.x, player.y) is False:
                     atk_chance = libtcod.random_get_int(0, 1, 100)
 
-                    if atk_chance < 75: #chance to fire weapon, 75%
+                    if atk_chance < 25: #chance to fire weapon, 75%
                         totalDamage = 0
                         damageList = roll_dice('2d4')
                         for dmg in damageList:
@@ -521,13 +521,19 @@ def get_unblocked_tile_around(x, y):
             return (dx + x, dy + y)
 
 # returns an object by tile
-# NOTE: Skips over REMAINS objects
 def get_object_by_tile(x, y):
     for obj in objects:
-        if (obj.x, obj.y) == (x, y) and "remains" not in obj.name:
+        if (obj.x, obj.y) == (x, y):
             return obj
     return None
  
+# returns a fighter by tile
+def get_fighter_by_tile(x, y):
+    for obj in objects:
+        if (obj.x, obj.y) == (x, y) and obj.fighter:
+            return obj
+    return None
+
 def create_room(room):
     global map
     #go through the tiles in the rectangle and make them passable
@@ -1350,7 +1356,7 @@ def cast_shoot(dx, dy):
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                         libtcod.console_flush()
                         sleep(PROJECTILE_SLEEP_TIME)
-                        hit_obj = get_object_by_tile(x, y)
+                        hit_obj = get_fighter_by_tile(x, y)
                         hasHit = True
                         if hit_obj and hit_obj.fighter:
                             monsterFound = True
