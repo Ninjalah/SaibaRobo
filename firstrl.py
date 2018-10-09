@@ -52,12 +52,13 @@ IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
 
 ## Fixed Weapon Values
-PROJECTILE_SLEEP_TIME = 0.04
+PROJECTILE_SLEEP_TIME = 0.03
 
 # Pistol
 PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = 1
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
+PISTOL_ACCURACY_BONUS = 15
 
 # Dagger
 DAGGER_DAMAGE = 3
@@ -349,56 +350,88 @@ class CyborgAI:
                         damageList = roll_dice('2d4')
                         for dmg in damageList:
                             totalDamage += dmg
-                        libtcod.line_init(monster.x, monster.y, player.x, player.y)
-                        prev_x, prev_y = monster.x, monster.y
-                        x, y = libtcod.line_step()
-                        while (x is not None):
-                            if totalDamage == 8:
-                                libtcod.console_set_default_foreground(con, libtcod.sky)
-                            elif totalDamage == 2:
-                                libtcod.console_set_default_foreground(con, libtcod.red)
-                            else:
-                                libtcod.console_set_default_foreground(con, libtcod.white)
-                            #if libtcod.map_is_in_fov(fov_map, x, y):
-                            normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
-                            if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
-                                libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
-                            elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
-                                libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
-                            elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
-                                libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
-                            elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
-                                libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
-                            else: # TODO: DEBUG: this shouldn't be reached but if so, debug
-                                libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
-                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                            libtcod.console_flush()
-                            sleep(PROJECTILE_SLEEP_TIME)
-                            if (is_blocked(x, y)): # if bullet hits a blocked tile at x, y
+                        # slope between player and reticule
+                        dx = player.x
+                        dy = player.y
+
+                        m_x = dx - monster.x
+                        m_y = dy - monster.y
+                        # starting x and y
+                        start_x = monster.x
+                        start_y = monster.y
+
+                        # Find furthest blocking tile
+                        hasHit = False
+                        
+                        while (hasHit is False):
+                            libtcod.line_init(start_x, start_y, dx, dy)
+                            prev_x, prev_y = start_x, start_y
+                            x, y = libtcod.line_step()
+                            while (x is not None):
+                                if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
+                                    libtcod.console_set_default_foreground(con, libtcod.sky)
+                                elif (totalDamage == 2):
+                                    libtcod.console_set_default_foreground(con, libtcod.red)
+                                else:
+                                    libtcod.console_set_default_foreground(con, libtcod.white)
                                 #if libtcod.map_is_in_fov(fov_map, x, y):
-                                libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
+                                if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
+                                    libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                                elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
+                                    libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
+                                elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
+                                    libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
+                                elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
+                                    libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
+                                else: # TODO: DEBUG: this shouldn't be reached but if so, debug
+                                    libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
                                 libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                                 libtcod.console_flush()
                                 sleep(PROJECTILE_SLEEP_TIME)
-                                hit_obj = get_object_by_tile(x, y)
-                                #hasHit = True
-                                if hit_obj and hit_obj.fighter:
-                                    #monsterFound = True
-                                    message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
-                                    hit_obj.fighter.take_damage(totalDamage)
-                                    break
-                                break
-                            else:
-                                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
-                                # redraws objs if a bullet is shot over them
                                 obj = get_object_by_tile(x, y)
-                                if obj is not None:
-                                    obj.draw()
-                                prev_x, prev_y = x, y
-                                x, y = libtcod.line_step()
-                        if (x is not None): # delete bullet char from spot hit
-                            libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
-                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(x, y, math.hypot(x - monster.x, y - monster.y)) is True: # if bullet hits a blocked tile at x, y
+                                    #if libtcod.map_is_in_fov(fov_map, x, y):
+                                    libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                    libtcod.console_flush()
+                                    sleep(PROJECTILE_SLEEP_TIME)
+                                    hit_obj = get_fighter_by_tile(x, y)
+                                    hasHit = True
+                                    if hit_obj and hit_obj.fighter:
+                                        monsterFound = True
+                                        message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                                        hit_obj.fighter.take_damage(totalDamage)
+                                        break
+                                    if monsterFound is False:
+                                        message('The shot misses any meaningful target.', libtcod.red)
+                                    break
+                                elif is_blocked(x, y) and obj is None:
+                                    #if libtcod.map_is_in_fov(fov_map, x, y):
+                                    libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                    libtcod.console_flush()
+                                    sleep(PROJECTILE_SLEEP_TIME)
+                                    hit_obj = get_fighter_by_tile(x, y)
+                                    hasHit = True
+                                    message('The shot misses any meaningful target.', libtcod.red)
+                                    break
+                                else:
+                                    libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                                    # redraws objs if a bullet is shot over them
+                                    if obj is not None:
+                                        obj.draw()
+                                    prev_x, prev_y = x, y
+                                    x, y = libtcod.line_step()
+                            if (x is not None): # delete bullet char from spot hit
+                                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                                libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            # bullet reached reticule, extend reticule
+                            start_x = dx
+                            start_y = dy
+                            dx = dx + m_x
+                            dy = dy + m_y
+
                     else: # chance to move, 25%
                         monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
                 else: # if Cyborg sees player but can't shoot player, move
@@ -481,7 +514,7 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_damage=None, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_damage=None, accuracy_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
         self.melee_power_bonus = melee_power_bonus
         self.ranged_damage = ranged_damage
@@ -492,6 +525,7 @@ class Equipment:
         self.max_ammo = ammo
         self.ammo = ammo
         self.max_range = range
+        self.accuracy_bonus = accuracy_bonus
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -730,6 +764,22 @@ def roll_dice(dmg_str):
 
     return vals
 
+# roll to hit. Base chance is 50%
+def roll_to_hit(x, y, range):
+    range = int(range)
+    chance = libtcod.random_get_int(0, 1, 100)
+    if range > 8: # -5% hit chance if further than 6 squares
+        chance -= 5
+    if range > 4: # -5% hit chance if further than 3 squares
+        chance -= 5
+    right_weapon = get_equipped_in_slot('right hand')
+    chance += right_weapon.accuracy_bonus
+    print('Range is: ' + str(range) + ' AccBonus: ' + str(right_weapon.accuracy_bonus) + ' Chance is: ' + str(chance))
+    if chance > 50:
+        return True
+    else:
+        return False
+
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
 def from_dungeon_level(table):
     for (value, level) in reversed(table):
@@ -743,7 +793,7 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='right hand', ammo=7, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE)
+    return Equipment(slot='right hand', ammo=777, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -1402,7 +1452,7 @@ def cast_shoot(dx, dy):
                 prev_x, prev_y = start_x, start_y
                 x, y = libtcod.line_step()
                 while (x is not None):
-                    if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT)
+                    if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
                         libtcod.console_set_default_foreground(con, libtcod.sky)
                     elif (totalDamage == 2):
                         libtcod.console_set_default_foreground(con, libtcod.red)
@@ -1423,7 +1473,8 @@ def cast_shoot(dx, dy):
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
-                    if (is_blocked(x, y)): # if bullet hits a blocked tile at x, y
+                    obj = get_object_by_tile(x, y)
+                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(x, y, math.hypot(x - player.x, y - player.y)) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
@@ -1439,10 +1490,19 @@ def cast_shoot(dx, dy):
                         if monsterFound is False:
                             message('The shot misses any meaningful target.', libtcod.red)
                         break
+                    elif is_blocked(x, y) and obj is None:
+                        #if libtcod.map_is_in_fov(fov_map, x, y):
+                        libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                        libtcod.console_flush()
+                        sleep(PROJECTILE_SLEEP_TIME)
+                        hit_obj = get_fighter_by_tile(x, y)
+                        hasHit = True
+                        message('The shot misses any meaningful target.', libtcod.red)
+                        break
                     else:
                         libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
                         # redraws objs if a bullet is shot over them
-                        obj = get_object_by_tile(x, y)
                         if obj is not None:
                             obj.draw()
                         prev_x, prev_y = x, y
@@ -1721,7 +1781,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=10000, defense=0, melee_power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=100, defense=0, melee_power=2, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
