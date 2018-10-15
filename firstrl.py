@@ -764,7 +764,7 @@ def roll_dice(dmg_str):
 
     return vals
 
-# roll to hit. Base chance is 50%
+# roll to hit. Base chance is 50%. Adds player's accuracy bonus
 def roll_to_hit(x, y, range):
     range = int(range)
     chance = libtcod.random_get_int(0, 1, 100)
@@ -774,11 +774,25 @@ def roll_to_hit(x, y, range):
         chance -= 5
     right_weapon = get_equipped_in_slot('right hand')
     chance += right_weapon.accuracy_bonus
-    print('Range is: ' + str(range) + ' AccBonus: ' + str(right_weapon.accuracy_bonus) + ' Chance is: ' + str(chance))
     if chance > 50:
         return True
     else:
         return False
+
+# helper function to return (min, max) damage of a dice roll
+def get_min_max_dmg(dmg_str):
+    arr = dmg_str.split('d')
+    min = 0
+    max = 0
+    # calculate the minimum
+    for i in range(int(arr[0])):
+        min += 1
+    
+    # calculate the maximum
+    for i in range(int(arr[0])):
+        max += int(arr[1])
+
+    return (min, max)
 
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
 def from_dungeon_level(table):
@@ -793,7 +807,7 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='right hand', ammo=777, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
+    return Equipment(slot='right hand', ammo=7, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -853,7 +867,7 @@ def cyborg_death(monster):
     # drop ammo on death
     (x, y) = get_unblocked_tile_around(monster.x, monster.y)
     ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
-    if x is not None and ammo_drop_chance < 50:
+    if x is not None and ammo_drop_chance < 75:
         item_component = Item()
         item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
         objects.append(item)
@@ -1452,9 +1466,10 @@ def cast_shoot(dx, dy):
                 prev_x, prev_y = start_x, start_y
                 x, y = libtcod.line_step()
                 while (x is not None):
-                    if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
+                    (min, max) = get_min_max_dmg(right_weapon.ranged_damage)
+                    if (totalDamage == max): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
                         libtcod.console_set_default_foreground(con, libtcod.sky)
-                    elif (totalDamage == 2):
+                    elif (totalDamage == min):
                         libtcod.console_set_default_foreground(con, libtcod.red)
                     else:
                         libtcod.console_set_default_foreground(con, libtcod.white)
