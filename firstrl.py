@@ -542,13 +542,13 @@ class Equipment:
 
         # equip object and show a message about it
         self.is_equipped = True
-        message('Equipped ' + self.owner.name + ' on ' + self.slot + '.', libtcod.light_green)
+        message('Equipped ' + self.owner.name + '.', libtcod.light_green)
 
     def dequip(self):
         # dequip object and show a message about it
         if not self.is_equipped: return
         self.is_equipped = False
-        message('Unequipped ' + self.owner.name + ' from ' + self.slot + '.', libtcod.light_yellow)
+        message('Unequipped ' + self.owner.name + '.', libtcod.light_yellow)
 
     def use(self):
         # just call the "use_function" if it is defined
@@ -766,15 +766,15 @@ def roll_dice(dmg_str):
     return vals
 
 # roll to hit. Base chance is 50%. Adds player's accuracy bonus
-def roll_to_hit(x, y, range):
+def roll_to_hit(x, y, range, bonus=0):
     range = int(range)
     chance = libtcod.random_get_int(0, 1, 100)
     if range > 8: # -5% hit chance if further than 6 squares
         chance -= 5
     if range > 4: # -5% hit chance if further than 3 squares
         chance -= 5
-    weapon = get_equipped_in_slot('weapon')
-    chance += weapon.accuracy_bonus
+    if bonus is not None:
+        chance += bonus
     if chance > 50:
         return True
     else:
@@ -1465,7 +1465,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                 x, y = libtcod.line_step()
                 while (x is not None):
                     (min, max) = get_min_max_dmg(weapon.ranged_damage)
-                    if (totalDamage == max): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
+                    if (totalDamage == max):
                         libtcod.console_set_default_foreground(con, libtcod.sky)
                     elif (totalDamage == min):
                         libtcod.console_set_default_foreground(con, libtcod.red)
@@ -1487,7 +1487,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
                     obj = get_object_by_tile(x, y)
-                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(x, y, math.hypot(x - player.x, y - player.y)) is True: # if bullet hits a blocked tile at x, y
+                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(x, y, math.hypot(x - player.x, y - player.y), weapon.accuracy_bonus) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
