@@ -52,7 +52,7 @@ IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
 
 ## Fixed Weapon Values
-PROJECTILE_SLEEP_TIME = 0.03
+PROJECTILE_SLEEP_TIME = 0.02
 
 # Pistol
 PISTOL_RANGED_DAMAGE = '2d4'
@@ -773,8 +773,8 @@ def roll_to_hit(x, y, range):
         chance -= 5
     if range > 4: # -5% hit chance if further than 3 squares
         chance -= 5
-    right_weapon = get_equipped_in_slot('right hand')
-    chance += right_weapon.accuracy_bonus
+    weapon = get_equipped_in_slot('weapon')
+    chance += weapon.accuracy_bonus
     if chance > 50:
         return True
     else:
@@ -808,11 +808,11 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='right hand', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
+    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
 
 # Create and return a dagger component
 def create_dagger_equipment():
-    return Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
+    return Equipment(slot='weapon', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
 
 ################################
 ## Monster Creation Functions ##
@@ -1026,7 +1026,7 @@ def get_names_under_mouse():
 
 # get equipment and ammo information from player
 def display_equipment_info():
-    equipment_component = get_equipped_in_slot('right hand')
+    equipment_component = get_equipped_in_slot('weapon')
     if equipment_component is not None: # if there is some equipped item
         if equipment_component.is_ranged: # if equipment is ranged
             libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
@@ -1430,18 +1430,18 @@ def cast_impact_grenade():
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
 # shoot pistol at tile (dx, dy)
-def cast_shoot_pistol(dx, dy, right_weapon):
+def cast_shoot_pistol(dx, dy, weapon):
     monsterFound = False
 
-    if right_weapon != None and right_weapon.is_ranged:
+    if weapon != None and weapon.is_ranged:
         if dx is None: return 'cancelled'
 
-        if right_weapon.ammo > 0:
+        if weapon.ammo > 0:
             totalDamage = 0
-            damage_list = roll_dice(right_weapon.ranged_damage)
+            damage_list = roll_dice(weapon.ranged_damage)
             for dmg in damage_list:
                 totalDamage += dmg
-            right_weapon.ammo -= 1
+            weapon.ammo -= 1
 
             # check if player shot themselves
             if (player.x == dx and player.y == dy):
@@ -1464,7 +1464,7 @@ def cast_shoot_pistol(dx, dy, right_weapon):
                 prev_x, prev_y = start_x, start_y
                 x, y = libtcod.line_step()
                 while (x is not None):
-                    (min, max) = get_min_max_dmg(right_weapon.ranged_damage)
+                    (min, max) = get_min_max_dmg(weapon.ranged_damage)
                     if (totalDamage == max): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
                         libtcod.console_set_default_foreground(con, libtcod.sky)
                     elif (totalDamage == min):
@@ -1530,36 +1530,36 @@ def cast_shoot_pistol(dx, dy, right_weapon):
                 dy = dy + m_y
 
         else:
-            message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
+            message('Your ' + weapon.owner.name + ' is empty!', libtcod.orange)
             return 'cancelled'
 
-# shoot the weapon in your right hand at tile (dx, dy)
+# shoot currently equipped weapon at tile (dx, dy)
 def cast_shoot(dx, dy):
     remove_reticule()
     render_all()
-    right_weapon = get_equipped_in_slot('right hand')
-    return right_weapon.shoot_function(dx, dy, right_weapon)
+    weapon = get_equipped_in_slot('weapon')
+    return weapon.shoot_function(dx, dy, weapon)
     
 # reload the weapon in your right hand
 def cast_reload():
-    right_weapon = get_equipped_in_slot('right hand')
+    weapon = get_equipped_in_slot('weapon')
     ammo_to_reload = player.fighter.ten_mm_rounds > 0
 
-    if right_weapon != None and right_weapon.is_ranged and right_weapon.ammo < right_weapon.max_ammo and ammo_to_reload is True:
-        message('You reload ' + right_weapon.owner.name + '!', libtcod.orange)
-        amount_to_reload = right_weapon.max_ammo - right_weapon.ammo
+    if weapon != None and weapon.is_ranged and weapon.ammo < weapon.max_ammo and ammo_to_reload is True:
+        message('You reload ' + weapon.owner.name + '!', libtcod.orange)
+        amount_to_reload = weapon.max_ammo - weapon.ammo
         if amount_to_reload > player.fighter.ten_mm_rounds: # if we can reload some but not all
-            right_weapon.ammo += player.fighter.ten_mm_rounds
+            weapon.ammo += player.fighter.ten_mm_rounds
             player.fighter.ten_mm_rounds = 0
         else: # we can reload to full
-            right_weapon.ammo += amount_to_reload
+            weapon.ammo += amount_to_reload
             player.fighter.ten_mm_rounds -= amount_to_reload
-        #equipped = get_equipped_in_slot(right_weapon.slot)
+        #equipped = get_equipped_in_slot(weapon.slot)
         #equipped.ammo += equipped.max_ammo - equipped.ammo
-    elif right_weapon != None and right_weapon.is_ranged and right_weapon.ammo == right_weapon.max_ammo:
-        message(right_weapon.owner.name + ' is already full of ammo!', libtcod.red)
+    elif weapon != None and weapon.is_ranged and weapon.ammo == weapon.max_ammo:
+        message(weapon.owner.name + ' is already full of ammo!', libtcod.red)
         return 'cancelled'
-    elif right_weapon == None:
+    elif weapon == None:
         message('Nothing to reload!', libtcod.red)
         return 'cancelled'
     elif ammo_to_reload is False:
@@ -1725,10 +1725,10 @@ def handle_keys():
 
             if key_char == 'c':
                 # show character stats
-                right_weapon = get_equipped_in_slot('right hand')
+                weapon = get_equipped_in_slot('weapon')
                 ranged_damage_str = 'None'
-                if (right_weapon is not None):
-                    ranged_damage_str = right_weapon.ranged_damage
+                if (weapon is not None):
+                    ranged_damage_str = weapon.ranged_damage
                 level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
                 msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
                     '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
@@ -1742,7 +1742,7 @@ def handle_keys():
 
             # use equipment; if ranged, call cast_shoot() function
             if key_char == 'f':
-                if get_equipped_in_slot('right hand') is not None and get_equipped_in_slot('right hand').is_ranged:
+                if get_equipped_in_slot('weapon') is not None and get_equipped_in_slot('weapon').is_ranged:
                     if take_aim() is not 'cancelled':
                         return 'turn-taken'
                 else:
@@ -1834,7 +1834,7 @@ def new_game():
     equipment_component.equip()
 
     # # initial equipment: a dagger
-    #equipment_component = Equipment(slot='right hand', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
+    #equipment_component = Equipment(slot='weapon', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
     #obj = Object(0, 0, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True)
     #inventory.append(obj)
     #equipment_component.equip()
