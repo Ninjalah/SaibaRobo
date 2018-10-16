@@ -514,7 +514,7 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_damage=None, accuracy_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_damage=None, accuracy_bonus=0, defense_bonus=0, max_hp_bonus=0):
         self.slot = slot
         self.melee_power_bonus = melee_power_bonus
         self.ranged_damage = ranged_damage
@@ -526,6 +526,7 @@ class Equipment:
         self.ammo = ammo
         self.max_range = range
         self.accuracy_bonus = accuracy_bonus
+        self.shoot_function = shoot_function
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -801,13 +802,13 @@ def from_dungeon_level(table):
             return value
     return 0
 
-#############################
-## Item Creation Functions ##
-#############################
+##################################
+## Equipment Creation Functions ##
+##################################
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='right hand', ammo=7, is_ranged=True, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
+    return Equipment(slot='right hand', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -1428,11 +1429,8 @@ def cast_impact_grenade():
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
-# shoot the weapon in your right hand at tile (dx, dy)
-def cast_shoot(dx, dy):
-    remove_reticule()
-    render_all()
-    right_weapon = get_equipped_in_slot('right hand')
+# shoot pistol at tile (dx, dy)
+def cast_shoot_pistol(dx, dy, right_weapon):
     monsterFound = False
 
     if right_weapon != None and right_weapon.is_ranged:
@@ -1534,6 +1532,13 @@ def cast_shoot(dx, dy):
         else:
             message('Your ' + right_weapon.owner.name + ' is empty!', libtcod.orange)
             return 'cancelled'
+
+# shoot the weapon in your right hand at tile (dx, dy)
+def cast_shoot(dx, dy):
+    remove_reticule()
+    render_all()
+    right_weapon = get_equipped_in_slot('right hand')
+    return right_weapon.shoot_function(dx, dy, right_weapon)
     
 # reload the weapon in your right hand
 def cast_reload():
