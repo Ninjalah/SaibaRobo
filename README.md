@@ -5,14 +5,16 @@ Cyberpunk Roguelike Action
 * **Package game into a single binary**: http://www.roguebasin.com/index.php?title=Complete_Roguelike_Tutorial,_using_Python%2Blibtcod,_extras#Creating_a_Binary
 
 * **General**
-  * **FINISHED**: Add blood droplets when Fighters take minor (non-lethal) damage
-    * Fighters bleed when moving and under 20% HP.
   * **TODO**: Add a **chance** to bleed each time an injured Fighter moves.
   * **TODO**: Add a special message for if Player shoots and kills themselves
   * **TODO**: Leveling system currently broken due to Stat mismatch
+  * **TODO**: Separate Weapon and Armor from Equipment
+  * **TODO**: Add Fighter stats
+    * Semi finished, functionality not added everywhere
+  * **TODO**: Tweak all numbers, finish accuracy system (roll_to_hit)
 
 * **HUD**
-  * **FINISHED**: Add a counter/currently-equipped message to the UI under the dungeon level
+  * **TODO**: Add stats to Character stat screen
 
 * **Add keyboard-controls for aiming system**: Draw a green line (of -'s) to a cursor (denoted by a green x), fire at the tile under the cursor.  Start the cursor at the location of the nearest monster.
   * Added for ranged weapons
@@ -20,17 +22,8 @@ Cyberpunk Roguelike Action
   * **TODO**: Fix AIM_RETICULE() so that if the reticule is placed on NEAREST_MONSTER, that same monster is chosen if AIM_RETICULE() is called again while another monster becomes the NEAREST_MONSTER (persistent targeting)
 
 * **Aiming System**
-  * Currently the aiming system is based on FOV
-  * **FINISHED**: Update aiming system so that bullets follow along a path, and hits anything that blocks before reaching reticule (walls, enemies, etc.)
 
 * **Weapons**
-  * **TODO**: Take only the necessary ammo from an ammo clip. If ammo clip has 0 rounds in it, discard from inventory automatically.
-    * Current behavior: Ammo clips are used and discarded for every reload, regardless of how many rounds are in the weapon when reloaded.
-
-* **Melee attacks with a ranged weapon do lesser damage.**
-  * Currently ranged weapons have their own fixed melee damages. Will add statistics that modify this damage (such as STR)
-
-* **Change 10mm ammo char from " to '.**
 
 * **Add Weapons**
   * Energy Sword
@@ -41,9 +34,12 @@ Cyberpunk Roguelike Action
 
 ## Player
 ### Stats
-* HP: Player's current health points. Reach 0, player dies.
-* AP: Attack power. Increases the damage done by the player.
-* DF: Defense. Decreases damage received by the player.
+* HP: Health points. Reach 0, you die.
+* STR: Strength. Adds damage to melee weapons.
+* ACC: Accuracy. Determines chance to hit.
+* FIN: Finesse. Adds damage to ranged weapons.
+* EVA: Evasion. Determines chance to dodge.
+* ARM: Armor. Reduces damage taken.
 
 ## Monsters
 Cyborg: Normal cybernetically enhanced human. Low health, low defense, low attack power. The most common monster type.

@@ -51,18 +51,36 @@ CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 3
 IMPACT_GRENADE_DAMAGE = 12
 
-## Fixed Weapon Values
+#########################
+## Fixed Weapon Values ##
 PROJECTILE_SLEEP_TIME = 0.02
+
+# Fists/Unarmed
+UNARMED_DAMAGE = '1d3'
 
 # Pistol
 PISTOL_RANGED_DAMAGE = '2d4'
-PISTOL_MELEE_DAMAGE = 1
+PISTOL_MELEE_DAMAGE = '2d3'
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
 PISTOL_ACCURACY_BONUS = 15
 
 # Dagger
-DAGGER_DAMAGE = 3
- 
+DAGGER_DAMAGE = '2d4'
+
+#########################
+
+##########################
+## Fixed Monster Values ##
+#TODO: Finish porting over these fixed values
+# TERMINATRON
+TERMINATRON_MELEE_DAMAGE = '2d6'
+
+# MECHARACHNID
+MECHARACHNID_MELEE_DAMAGE = '2d6'
+
+# CYBORG
+CYBORG_RANGED_DAMAGE = '2d4'
+
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
 TORCH_RADIUS = 10
@@ -258,11 +276,17 @@ class Object:
 
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
-    def __init__(self, hp, defense, xp, melee_power=0, ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None):
+    def __init__(self, hp=0, strength=0, accuracy=0, finesse=0, evasion=0, armor=0, melee_damage=None, ranged_damage=None, xp=0, 
+        ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None):
         self.base_max_hp = hp
         self.hp = hp
-        self.base_defense = defense
-        self.base_melee_power = melee_power
+        self.base_strength = strength
+        self.base_accuracy = accuracy
+        self.base_finesse = finesse
+        self.base_evasion = evasion
+        self.base_armor = armor
+        self.base_melee_damage = melee_damage
+        self.base_ranged_damage = ranged_damage
         self.xp = xp
         self.ten_mm_rounds = ten_mm_rounds
         self.max_ten_mm_rounds = max_ten_mm_rounds
@@ -270,14 +294,60 @@ class Fighter:
 
     # return actual power, by summing up the bonuses from all equipped items
     @property
-    def melee_power(self):
-        bonus = sum(equipment.melee_power_bonus for equipment in get_all_equipped(self.owner))
-        return self.base_melee_power + bonus
+    def melee_damage(self):
+        if self.owner == player: # if Fighter is player
+            weapon = get_equipped_in_slot('weapon')
+            if weapon is not None: # and if holding a weapon
+                if (self.strength != 0):
+                    return str(weapon.melee_damage) + '+' + str(self.strength)
+                else:
+                    return str(weapon.melee_damage)
+            else: # or if melee_damage is none (not holding weapon)
+                if (self.strength != 0):
+                    return UNARMED_DAMAGE + '+' + str(self.strength)
+                else:
+                    return UNARMED_DAMAGE
+        else: # if Fighter is NOT player
+            return str(self.base_melee_damage) + '+' + str(self.strength)
 
     @property
-    def defense(self):
-        bonus = sum(equipment.defense_bonus for equipment in get_all_equipped(self.owner))
-        return self.base_defense + bonus
+    def ranged_damage(self):
+        if self.owner == player: # if Fighter is player
+            weapon = get_equipped_in_slot('weapon')
+            if weapon is not None and weapon.ranged_damage is not None: # and if holding a weapon
+                if (self.finesse != 0):
+                    return str(weapon.ranged_damage) + '+' + str(self.finesse)
+                else:
+                    return str(weapon.ranged_damage)
+            else: # or if ranged_damage is none (not holding weapon)
+                return None
+        else: # if Fighter is NOT player
+            return str(self.base_ranged_damage) + '+' + str(self.finesse)
+
+    @property
+    def strength(self):
+        bonus = sum(equipment.strength_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_strength + bonus
+
+    @property
+    def accuracy(self):
+        bonus = sum(equipment.accuracy_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_accuracy + bonus
+
+    @property
+    def finesse(self):
+        bonus = sum(equipment.finesse_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_finesse + bonus
+
+    @property
+    def evasion(self):
+        bonus = sum(equipment.evasion_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_evasion + bonus
+
+    @property
+    def armor(self):
+        bonus = sum(equipment.armor_bonus for equipment in get_all_equipped(self.owner))
+        return self.base_armor + bonus
 
     @property
     def max_hp(self):
@@ -286,14 +356,18 @@ class Fighter:
 
     # a simple formula for attack damage
     def attack(self, target):
-        damage = self.melee_power - target.fighter.defense
+        if roll_to_hit(accuracy_bonus=self.accuracy, evasion_penalty=target.fighter.evasion):
+            totalDamage = roll_dice(self.melee_damage)
+            totalDamage -= target.fighter.armor
 
-        if damage > 0:
-            # make the target take some damage
-            message(self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.')
-            target.fighter.take_damage(damage)
+            if totalDamage > 0:
+                # make the target take some damage
+                message(self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(totalDamage) + ' hit points.')
+                target.fighter.take_damage(totalDamage)
+            else:
+                message(self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!')
         else:
-            message(self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!')
+            message(self.owner.name.capitalize() + ' misses the attack on ' + target.name + '!')
 
     # apply damage if possible
     def take_damage(self, damage):
@@ -346,10 +420,7 @@ class CyborgAI:
                     atk_chance = libtcod.random_get_int(0, 1, 100)
 
                     if atk_chance < 75: #chance to fire weapon, 75%
-                        totalDamage = 0
-                        damageList = roll_dice('2d4')
-                        for dmg in damageList:
-                            totalDamage += dmg
+                        totalDamage = roll_dice(monster.fighter.ranged_damage)
                         # slope between player and reticule
                         dx = player.x
                         dy = player.y
@@ -368,9 +439,10 @@ class CyborgAI:
                             prev_x, prev_y = start_x, start_y
                             x, y = libtcod.line_step()
                             while (x is not None):
-                                if (totalDamage == 8): # TODO: LEVERAGE FOR ALL WEAPONS (MAX_DMG = CRIT, MIN_DMG = CRIT_FAIL)
+                                (min, max) = get_min_max_dmg(monster.fighter.ranged_damage)
+                                if (totalDamage == max):
                                     libtcod.console_set_default_foreground(con, libtcod.sky)
-                                elif (totalDamage == 2):
+                                elif (totalDamage == min):
                                     libtcod.console_set_default_foreground(con, libtcod.red)
                                 else:
                                     libtcod.console_set_default_foreground(con, libtcod.white)
@@ -390,7 +462,7 @@ class CyborgAI:
                                 libtcod.console_flush()
                                 sleep(PROJECTILE_SLEEP_TIME)
                                 obj = get_object_by_tile(x, y)
-                                if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(x, y, math.hypot(x - monster.x, y - monster.y)) is True: # if bullet hits a blocked tile at x, y
+                                if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=monster.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                                     #if libtcod.map_is_in_fov(fov_map, x, y):
                                     libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
@@ -514,18 +586,22 @@ class Item:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, max_ammo=0, ammo=0, melee_power_bonus=0, ranged_damage=None, accuracy_bonus=0, defense_bonus=0, max_hp_bonus=0):
+    def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, max_ammo=0, ammo=0, melee_damage=None, ranged_damage=None, 
+        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0):
         self.slot = slot
-        self.melee_power_bonus = melee_power_bonus
+        self.melee_damage = melee_damage
         self.ranged_damage = ranged_damage
-        self.defense_bonus = defense_bonus
         self.max_hp_bonus = max_hp_bonus
+        self.strength_bonus = strength_bonus
+        self.accuracy_bonus = accuracy_bonus
+        self.finesse_bonus = finesse_bonus
+        self.evasion_bonus = evasion_bonus
+        self.armor_bonus = armor_bonus
         self.is_equipped = False
         self.is_ranged = is_ranged
         self.max_ammo = ammo
         self.ammo = ammo
         self.max_range = range
-        self.accuracy_bonus = accuracy_bonus
         self.shoot_function = shoot_function
 
     def toggle_equip(self): # toggle equip status
@@ -757,43 +833,60 @@ def d(sides):
     return libtcod.random_get_int(0, 1, sides)
 
 # throw n dice of SIDES sides
-def roll_dice(dmg_str):
-    arr = dmg_str.split('d')
+# NOTE: d_str = 'nds+b' ex: 2d4+1
+# n = number of dice
+# s = number of sides
+# b = bonus
+def roll_dice(d_str):
+    d_arr = d_str.split('d')
+    n = int(d_arr[0])
+    s = d_arr[1]
+    b = None
+    if '+' in s:
+        b = s.split('+')
+        s = b[0]
+        b = int(b[1])
     vals = []
-    for i in range(int(arr[0])):
-        vals.append(d(int(arr[1])))
+    for i in range (n):
+        vals.append(d(int(s)))
 
-    return vals
-
-# roll to hit. Base chance is 50%. Adds player's accuracy bonus
-def roll_to_hit(x, y, range, bonus=0):
-    range = int(range)
-    chance = libtcod.random_get_int(0, 1, 100)
-    if range > 8: # -5% hit chance if further than 6 squares
-        chance -= 5
-    if range > 4: # -5% hit chance if further than 3 squares
-        chance -= 5
-    if bonus is not None:
-        chance += bonus
-    if chance > 50:
-        return True
-    else:
-        return False
+    return sum(vals) if b is None else sum(vals) + b
 
 # helper function to return (min, max) damage of a dice roll
-def get_min_max_dmg(dmg_str):
-    arr = dmg_str.split('d')
+def get_min_max_dmg(d_str):
+    d_arr = d_str.split('d')
+    n = int(d_arr[0])
+    s = d_arr[1]
+    b = None
+    if '+' in s:
+        b = s.split('+')
+        s = b[0]
+        b = int(b[1])
+
     min = 0
     max = 0
     # calculate the minimum
-    for i in range(int(arr[0])):
+    for i in range(n):
         min += 1
     
     # calculate the maximum
-    for i in range(int(arr[0])):
-        max += int(arr[1])
+    for i in range(n):
+        max += int(s)
 
-    return (min, max)
+    return (min, max) if b is None else (min+b, max+b)
+
+# roll to hit. Base chance is 50%. Adds player's accuracy bonus
+# TODO: Finish accuracy changes
+def roll_to_hit(accuracy_bonus=0, evasion_penalty=0):
+    totalChance = 0
+    totalChance += roll_dice('3d6')
+    totalChance += evasion_penalty
+    accuracy = 10 # standard chance to hit is 10 (about 50%)
+    accuracy += accuracy_bonus
+    if accuracy >= totalChance:
+        return True
+    else:
+        return False
 
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
 def from_dungeon_level(table):
@@ -808,11 +901,11 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_power_bonus=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
+    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_damage=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
 
 # Create and return a dagger component
 def create_dagger_equipment():
-    return Equipment(slot='weapon', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
+    return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE)
 
 ################################
 ## Monster Creation Functions ##
@@ -820,15 +913,16 @@ def create_dagger_equipment():
 
 # Create and return a teminatron fighter component
 def create_terminatron_fighter_component():
-    return Fighter(hp=100, defense=5, melee_power=25, xp=10000, death_function=basic_monster_death)
+    return Fighter(hp=100, armor=5, strength=13, melee_damage=TERMINATRON_MELEE_DAMAGE, xp=10000, death_function=basic_monster_death)
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
-    return Fighter(hp=15, defense=1, melee_power=8, xp=100, death_function=basic_monster_death)
+    return Fighter(hp=15, armor=1, strength=3, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
 
 # Create and return a cyborg fighter component
+# TODO: Finish ranged/melee damage for cyborgs
 def create_cyborg_fighter_component():
-    return Fighter(hp=8, defense=0, melee_power=2, xp=35, death_function=cyborg_death)
+    return Fighter(hp=8, armor=0, strength=2, xp=35, ranged_damage=CYBORG_RANGED_DAMAGE, death_function=cyborg_death)
 
 #############################
 ## Fighter Death Functions ##
@@ -1207,6 +1301,7 @@ def target_monster(max_range=None):
                 return obj
 
 # see if the player's experience is enough to level-up
+# TODO: REVAMP THIS FUNCTION TOTALLY
 def check_level_up():
     level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
     if player.fighter.xp >= level_up_xp:
@@ -1437,10 +1532,7 @@ def cast_shoot_pistol(dx, dy, weapon):
         if dx is None: return 'cancelled'
 
         if weapon.ammo > 0:
-            totalDamage = 0
-            damage_list = roll_dice(weapon.ranged_damage)
-            for dmg in damage_list:
-                totalDamage += dmg
+            totalDamage = roll_dice(player.fighter.ranged_damage)
             weapon.ammo -= 1
 
             # check if player shot themselves
@@ -1464,7 +1556,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                 prev_x, prev_y = start_x, start_y
                 x, y = libtcod.line_step()
                 while (x is not None):
-                    (min, max) = get_min_max_dmg(weapon.ranged_damage)
+                    (min, max) = get_min_max_dmg(player.fighter.ranged_damage)
                     if (totalDamage == max):
                         libtcod.console_set_default_foreground(con, libtcod.sky)
                     elif (totalDamage == min):
@@ -1487,7 +1579,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
                     obj = get_object_by_tile(x, y)
-                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(x, y, math.hypot(x - player.x, y - player.y), weapon.accuracy_bonus) is True: # if bullet hits a blocked tile at x, y
+                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
@@ -1725,15 +1817,12 @@ def handle_keys():
 
             if key_char == 'c':
                 # show character stats
-                weapon = get_equipped_in_slot('weapon')
-                ranged_damage_str = 'None'
-                if (weapon is not None):
-                    ranged_damage_str = weapon.ranged_damage
+                print('Player.fighter: ' + str(player.fighter))
                 level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
                 msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
                     '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
-                    '\nMelee Attack: ' + str(player.fighter.melee_power) + '\nRanged Damage: ' + ranged_damage_str +
-                     '\nDefense: ' + str(player.fighter.defense), CHARACTER_SCREEN_WIDTH)
+                    '\nMelee Damage: ' + str(player.fighter.melee_damage) + '\nRanged Damage: ' + str(player.fighter.ranged_damage) +
+                     '\nArmor: ' + str(player.fighter.armor), CHARACTER_SCREEN_WIDTH)
 
             if key_char == 'r':
                 # reload current weapon
@@ -1801,7 +1890,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=100, defense=0, melee_power=2, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=100, armor=0, strength=0, finesse=1, xp=0, death_function=player_death) # TODO: REMOVE FINESSE BUFF
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
