@@ -42,8 +42,9 @@ MAX_ROOMS = 30
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
-LEVEL_UP_BASE = 200000
+LEVEL_UP_BASE = 200
 LEVEL_UP_FACTOR = 150
+LEVEL_UP_XP = LEVEL_UP_BASE + LEVEL_UP_FACTOR
 
 # spell values
 HEAL_AMOUNT = 35
@@ -1126,15 +1127,15 @@ def display_equipment_info():
     equipment_component = get_equipped_in_slot('weapon')
     if equipment_component is not None: # if there is some equipped item
         if equipment_component.is_ranged: # if equipment is ranged
-            libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
+            libtcod.console_print_ex(hud_panel, 1, 7, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
         else:
-            libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name))
+            libtcod.console_print_ex(hud_panel, 1, 7, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name))
     else:
-        libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Unarmed')    
+        libtcod.console_print_ex(hud_panel, 1, 7, libtcod.BKGND_NONE, libtcod.LEFT, 'Unarmed')    
 
 # get total ammo info and display
 def display_ammo_count():
-    libtcod.console_print_ex(hud_panel, 1, 6, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
+    libtcod.console_print_ex(hud_panel, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
 
 # render game information to screen
 def render_all():
@@ -1226,6 +1227,14 @@ def render_all():
     # show the player's health
     render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.base_max_hp, libtcod.light_red, libtcod.darker_red)
 
+    # show the player's XP
+    # TODO: THIS IS UNTESTED. Make sure this works with all levels/XP levels.
+    render_bar(1, 3, BAR_WIDTH, 'XP', player.fighter.xp, LEVEL_UP_XP, libtcod.dark_yellow, libtcod.darkest_yellow)
+
+    # show the player's current level
+    # TODO: Add titles next to the player's level
+    libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Level ' + str(player.level))
+
     # show the player's equipment and ammo (if applicable)
     display_equipment_info()
 
@@ -1234,7 +1243,7 @@ def render_all():
     display_ammo_count()
 
     # display dungeon level to GUI
-    libtcod.console_print_ex(hud_panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
 
     # display names of objects under the mouse
     libtcod.console_set_default_foreground(hud_panel, libtcod.light_grey) #changed to light_gray
@@ -1311,11 +1320,11 @@ def target_monster(max_range=None):
 # see if the player's experience is enough to level-up
 # TODO: REVAMP THIS FUNCTION TOTALLY
 def check_level_up():
-    level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
-    if player.fighter.xp >= level_up_xp:
+    LEVEL_UP_XP = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
+    if player.fighter.xp >= LEVEL_UP_XP:
         # level up!
         player.level += 1
-        player.fighter.xp -= level_up_xp
+        player.fighter.xp -= LEVEL_UP_XP
         message('Your battle skills grow stronger! You reached level ' + str(player.level) + '!', libtcod.yellow)
 
         choice = None
@@ -1826,9 +1835,9 @@ def handle_keys():
             if key_char == 'c':
                 # show character stats
                 print('Player.fighter: ' + str(player.fighter))
-                level_up_xp = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
+                LEVEL_UP_XP = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
                 msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
-                    '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
+                    '\nExperience to level up: ' + str(LEVEL_UP_XP) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
                     '\nMelee Damage: ' + str(player.fighter.melee_damage) + '\nRanged Damage: ' + str(player.fighter.ranged_damage) +
                      '\nArmor: ' + str(player.fighter.armor), CHARACTER_SCREEN_WIDTH)
 
