@@ -42,7 +42,7 @@ MAX_ROOMS = 30
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
-LEVEL_UP_BASE = 200
+LEVEL_UP_BASE = 2000
 LEVEL_UP_FACTOR = 150
 LEVEL_UP_XP = LEVEL_UP_BASE + LEVEL_UP_FACTOR
 
@@ -397,21 +397,21 @@ class Fighter:
 class MeleeMonster:
     def take_turn(self):
         # roll to see if monster moves
-        if libtcod.random_get_int(0, 1, 100) < 85:
-            # a basic monster takes its turn. If monster sees player, chase
-            monster = self.owner
-            if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
+        #if libtcod.random_get_int(0, 1, 100) < 85:
+        # a basic monster takes its turn. If monster sees player, chase
+        monster = self.owner
+        if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
 
-                # move towards player if far away
-                if monster.distance_to(player) >= 2:
-                    monster.clear()
-                    monster.move_astar(player)
-                
-                # close enough, attack! (if the player is still alive)
-                elif player.fighter.hp > 0:
-                    monster.fighter.attack(player)
-            else: # if monster doesn't see player, move randomly
-                monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+            # move towards player if far away
+            if monster.distance_to(player) >= 2:
+                monster.clear()
+                monster.move_astar(player)
+            
+            # close enough, attack! (if the player is still alive)
+            elif player.fighter.hp > 0:
+                monster.fighter.attack(player)
+        else: # if monster doesn't see player, move randomly
+            monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
 # AI for Cyborgs (ranged)
 class CyborgAI:
@@ -880,7 +880,6 @@ def get_min_max_dmg(d_str):
     return (min, max) if b is None else (min+b, max+b)
 
 # roll to hit. Base chance is 50%. Adds player's accuracy bonus
-# TODO: Finish accuracy changes
 def roll_to_hit(accuracy_bonus=0, evasion_penalty=0):
     totalChance = 0
     totalChance += roll_dice('3d6')
@@ -1137,11 +1136,72 @@ def display_equipment_info():
 def display_ammo_count():
     libtcod.console_print_ex(hud_panel, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
 
+# display the chance to hit Fighter at Reticule
+def display_chance_to_hit():
+    enemy = get_fighter_by_tile(reticule.x, reticule.y)
+    if enemy is not None and enemy is not player:
+        chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
+        print('chance to hit: ' + str(chance_to_hit))
+        string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
+        libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, string)
+
+# display the player's stats to hud screen
+def display_player_stats():
+    # STR
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 + 1, libtcod.BKGND_NONE, libtcod.LEFT, 'STR: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, 6, SCREEN_HEIGHT/3 + 1, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.strength))
+
+    # FIN
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, 'FIN: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.finesse))
+
+    # ACC
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 + 3, libtcod.BKGND_NONE, libtcod.LEFT, 'ACC: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, 6, SCREEN_HEIGHT/3 + 3, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.accuracy))
+
+    # EVA
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, 'EVA: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.evasion))
+
+    # ARM
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 + 5, libtcod.BKGND_NONE, libtcod.LEFT, 'ARM: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, 6, SCREEN_HEIGHT/3 + 5, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.armor))
+
+    # MELEE DAMAGE
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, 'MELEE DMG: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
+
+    # RANGED DAMAGE
+    libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
+    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, 'RANGE DMG: ')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
+    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.ranged_damage))
+
 # render game information to screen
 def render_all():
     global fov_map, color_dark_wall, color_light_wall
     global color_dark_ground, color_light_ground
     global fov_recompute
+
+    # prepare to render the LOG panel
+    libtcod.console_set_default_background(log_panel, libtcod.black) # TODO: change this back to libtcod.black
+    libtcod.console_clear(log_panel)
+
+    # prepare to render the HUD panel
+    libtcod.console_set_default_background(hud_panel, libtcod.black) # TODO: change this back to libtcod.black
+    libtcod.console_clear(hud_panel)
  
     if fov_recompute:
         #recompute FOV if needed (the player moved or something)
@@ -1178,6 +1238,7 @@ def render_all():
     player.draw() # draw the player object
     # draw the reticule object last (over the player)
     if reticule is not None:
+        display_chance_to_hit()
         reticule.draw()
         libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
         prev_x, prev_y = player.x, player.y
@@ -1209,14 +1270,6 @@ def render_all():
     # blit the contents of "con" to the root console
     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
 
-    # prepare to render the LOG panel
-    libtcod.console_set_default_background(log_panel, libtcod.black) # TODO: change this back to libtcod.black
-    libtcod.console_clear(log_panel)
-
-    # prepare to render the HUD panel
-    libtcod.console_set_default_background(hud_panel, libtcod.black) # TODO: change this back to libtcod.black
-    libtcod.console_clear(hud_panel)
-
     # print the game messages one line at a time
     y = 1
     for (line, color) in game_msgs:
@@ -1233,7 +1286,7 @@ def render_all():
 
     # show the player's current level
     # TODO: Add titles next to the player's level
-    libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Level ' + str(player.level))
+    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2, 5, libtcod.BKGND_NONE, libtcod.CENTER, 'Level ' + str(player.level))
 
     # show the player's equipment and ammo (if applicable)
     display_equipment_info()
@@ -1241,6 +1294,9 @@ def render_all():
     # show the player's total ammo count
     # TODO: Leverage for multiple ammo types
     display_ammo_count()
+
+    # show the player's stats
+    display_player_stats()
 
     # display dungeon level to GUI
     libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
@@ -1907,7 +1963,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, death_function=player_death)
+    fighter_component = Fighter(hp=100, xp=0, finesse=2, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
