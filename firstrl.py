@@ -5,20 +5,23 @@ import shelve
 from time import sleep
  
 #actual size of the window
-SCREEN_WIDTH = 80
-SCREEN_HEIGHT = 50
+SCREEN_WIDTH = 113
+SCREEN_HEIGHT = 64
  
 #size of the map
-MAP_WIDTH = 80
-MAP_HEIGHT = 43
+MAP_WIDTH = 83
+MAP_HEIGHT = 54
+
+#size of the hud
+HUD_WIDTH = 30
 
 # sizes and coordinates relevant for the GUI
-BAR_WIDTH = 20
-PANEL_HEIGHT = 7
-PANEL_Y = SCREEN_HEIGHT - PANEL_HEIGHT
-MSG_X = BAR_WIDTH + 2
-MSG_WIDTH = SCREEN_WIDTH - BAR_WIDTH - 2
-MSG_HEIGHT = PANEL_HEIGHT - 1
+BAR_WIDTH = 28
+LOG_HEIGHT = 10
+LOG_Y = MAP_HEIGHT
+MSG_X = 2
+MSG_WIDTH = MAP_WIDTH - 2
+MSG_HEIGHT = LOG_HEIGHT - 1
 INVENTORY_WIDTH = 50
 LEVEL_SCREEN_WIDTH = 40
 CHARACTER_SCREEN_WIDTH = 30
@@ -62,7 +65,7 @@ UNARMED_DAMAGE = '1d3'
 PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = '2d3'
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
-PISTOL_ACCURACY_BONUS = 15
+PISTOL_ACCURACY_BONUS = 2
 
 # Dagger
 DAGGER_DAMAGE = '2d4'
@@ -922,7 +925,7 @@ def create_mecharachnid_fighter_component():
 # Create and return a cyborg fighter component
 # TODO: Finish ranged/melee damage for cyborgs
 def create_cyborg_fighter_component():
-    return Fighter(hp=8, armor=0, strength=2, xp=35, ranged_damage=CYBORG_RANGED_DAMAGE, death_function=cyborg_death)
+    return Fighter(hp=8, armor=0, strength=2, accuracy=2, xp=35, ranged_damage=CYBORG_RANGED_DAMAGE, death_function=cyborg_death)
 
 #############################
 ## Fighter Death Functions ##
@@ -1092,17 +1095,17 @@ def render_bar(x, y, total_width, name, value, maximum, bar_color, back_color):
     bar_width = int(float(value) / maximum * total_width)
     
     # render the background first
-    libtcod.console_set_default_background(panel, back_color)
-    libtcod.console_rect(panel, x, y, total_width, 1, False, libtcod.BKGND_SCREEN)
+    libtcod.console_set_default_background(hud_panel, back_color)
+    libtcod.console_rect(hud_panel, x, y, total_width, 1, False, libtcod.BKGND_SCREEN)
 
     # now render the bar on top
-    libtcod.console_set_default_background(panel, bar_color)
+    libtcod.console_set_default_background(hud_panel, bar_color)
     if bar_width > 0:
-        libtcod.console_rect(panel, x, y, bar_width, 1, False, libtcod.BKGND_SCREEN)
+        libtcod.console_rect(hud_panel, x, y, bar_width, 1, False, libtcod.BKGND_SCREEN)
 
     # finally, some centered text with the values
-    libtcod.console_set_default_foreground(panel, libtcod.white)
-    libtcod.console_print_ex(panel, x + total_width / 2, y, libtcod.BKGND_NONE, libtcod.CENTER, name + ': ' + str(value) + '/' + str(maximum))
+    libtcod.console_set_default_foreground(hud_panel, libtcod.white)
+    libtcod.console_print_ex(hud_panel, x + total_width / 2, y, libtcod.BKGND_NONE, libtcod.CENTER, name + ': ' + str(value) + '/' + str(maximum))
 
 # get information of entities under mouse cursor
 def get_names_under_mouse():
@@ -1123,15 +1126,15 @@ def display_equipment_info():
     equipment_component = get_equipped_in_slot('weapon')
     if equipment_component is not None: # if there is some equipped item
         if equipment_component.is_ranged: # if equipment is ranged
-            libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
+            libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
         else:
-            libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name))
+            libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name))
     else:
-        libtcod.console_print_ex(panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Unarmed')    
+        libtcod.console_print_ex(hud_panel, 1, 5, libtcod.BKGND_NONE, libtcod.LEFT, 'Unarmed')    
 
 # get total ammo info and display
 def display_ammo_count():
-    libtcod.console_print_ex(panel, 1, 6, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
+    libtcod.console_print_ex(hud_panel, 1, 6, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
 
 # render game information to screen
 def render_all():
@@ -1160,9 +1163,9 @@ def render_all():
                 else:
                     #it's visible
                     if wall:
-                        libtcod.console_set_char_background(con, x, y, color_light_wall, libtcod.BKGND_SET )
+                        libtcod.console_set_char_background(con, x, y, color_light_wall, libtcod.BKGND_SET)
                     else:
-                        libtcod.console_set_char_background(con, x, y, color_light_ground, libtcod.BKGND_SET )
+                        libtcod.console_set_char_background(con, x, y, color_light_ground, libtcod.BKGND_SET)
                     # since it's visible, it's explored
                     map[x][y].explored = True
  
@@ -1201,22 +1204,26 @@ def render_all():
                 libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
             prev_x, prev_y = x, y
             x, y = libtcod.line_step()
- 
+
     # blit the contents of "con" to the root console
     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
 
-    # prepare to render the GUI panel
-    libtcod.console_set_default_background(panel, libtcod.black)
-    libtcod.console_clear(panel)
+    # prepare to render the LOG panel
+    libtcod.console_set_default_background(log_panel, libtcod.black) # TODO: change this back to libtcod.black
+    libtcod.console_clear(log_panel)
+
+    # prepare to render the HUD panel
+    libtcod.console_set_default_background(hud_panel, libtcod.black) # TODO: change this back to libtcod.black
+    libtcod.console_clear(hud_panel)
 
     # print the game messages one line at a time
     y = 1
     for (line, color) in game_msgs:
-        libtcod.console_set_default_foreground(panel, color)
-        libtcod.console_print_ex(panel, MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
+        libtcod.console_set_default_foreground(log_panel, color)
+        libtcod.console_print_ex(log_panel, MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
         y += 1
 
-    # show the player's stats
+    # show the player's health
     render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.base_max_hp, libtcod.light_red, libtcod.darker_red)
 
     # show the player's equipment and ammo (if applicable)
@@ -1227,14 +1234,15 @@ def render_all():
     display_ammo_count()
 
     # display dungeon level to GUI
-    libtcod.console_print_ex(panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
+    libtcod.console_print_ex(hud_panel, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
 
     # display names of objects under the mouse
-    libtcod.console_set_default_foreground(panel, libtcod.light_gray)
-    libtcod.console_print_ex(panel, 1, 0, libtcod.BKGND_NONE, libtcod.LEFT, get_names_under_mouse())
+    libtcod.console_set_default_foreground(hud_panel, libtcod.light_grey) #changed to light_gray
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, get_names_under_mouse())
 
     # blit the contents of "panel" to the root console
-    libtcod.console_blit(panel, 0, 0, SCREEN_WIDTH, PANEL_HEIGHT, 0, 0, PANEL_Y)
+    libtcod.console_blit(log_panel, 0, 0, SCREEN_WIDTH - HUD_WIDTH, LOG_HEIGHT, 0, 0, LOG_Y)
+    libtcod.console_blit(hud_panel, 0, 0, HUD_WIDTH, SCREEN_HEIGHT, 0, SCREEN_WIDTH - HUD_WIDTH, 0)
 
 # split the message if necessary, among multiple lines
 def message(new_msg, color = libtcod.white):
@@ -1890,7 +1898,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=100, armor=0, strength=0, finesse=1, xp=0, death_function=player_death) # TODO: REMOVE FINESSE BUFF
+    fighter_component = Fighter(hp=100, xp=0, death_function=player_death)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -1993,14 +2001,14 @@ def play_game():
 #############
 
 def main_menu():
-    img = libtcod.image_load('stolen_title_screen.png')
+    img = libtcod.image_load('another_stolen_title.png')
 
     while not libtcod.console_is_window_closed():
-        # show the background image, at twice the regular console resoltion
+        # show the background image, at twice the regular console resolution
         libtcod.image_blit_2x(img, 0, 0, 0)
 
         # show the game's title, and some credits
-        libtcod.console_set_default_foreground(0, libtcod.light_yellow)
+        libtcod.console_set_default_foreground(0, libtcod.gold)
         libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT/2-4, libtcod.BKGND_NONE, libtcod.CENTER, 'SaibaRobo: Cyberpunk Roguelike Action')
         libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT-2, libtcod.BKGND_NONE, libtcod.CENTER, 'By Ninjalah')
 
@@ -2020,12 +2028,14 @@ def main_menu():
         elif choice == 2: # quit
             break
 
-libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+#libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(MAP_WIDTH, MAP_HEIGHT)
-panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
+log_panel = libtcod.console_new(MAP_WIDTH, LOG_HEIGHT)
+hud_panel = libtcod.console_new(HUD_WIDTH, SCREEN_HEIGHT)
 
 # set mouse/keyboard controls
 mouse = libtcod.Mouse()
