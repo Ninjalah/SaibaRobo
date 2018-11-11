@@ -38,13 +38,16 @@ RETICULE_Z_VAL = 99
 # parameters for dungeon generator (num of monsters, items, etc.)
 ROOM_MAX_SIZE = 14
 ROOM_MIN_SIZE = 6
-MAX_ROOMS = 30
+MAX_ROOMS = 99 # this was 30
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
 LEVEL_UP_BASE = 2000
 LEVEL_UP_FACTOR = 150
 LEVEL_UP_XP = LEVEL_UP_BASE + LEVEL_UP_FACTOR
+
+# Run values
+RUN_DURATION = 50
 
 # spell values
 HEAL_AMOUNT = 35
@@ -57,6 +60,7 @@ IMPACT_GRENADE_DAMAGE = 12
 
 #########################
 ## Fixed Weapon Values ##
+#########################
 PROJECTILE_SLEEP_TIME = 0.02
 
 # Fists/Unarmed
@@ -281,7 +285,7 @@ class Object:
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
     def __init__(self, hp=0, strength=0, accuracy=0, finesse=0, evasion=0, armor=0, melee_damage=None, ranged_damage=None, xp=0, 
-        ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None):
+        ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None, run_status=None, run_duration=0):
         self.base_max_hp = hp
         self.hp = hp
         self.base_strength = strength
@@ -291,10 +295,12 @@ class Fighter:
         self.base_armor = armor
         self.base_melee_damage = melee_damage
         self.base_ranged_damage = ranged_damage
+        self.run_duration = run_duration
         self.xp = xp
         self.ten_mm_rounds = ten_mm_rounds
         self.max_ten_mm_rounds = max_ten_mm_rounds
         self.death_function = death_function
+        self.run_status = run_status
 
     # return actual power, by summing up the bonuses from all equipped items
     @property
@@ -336,6 +342,8 @@ class Fighter:
     @property
     def accuracy(self):
         bonus = sum(equipment.accuracy_bonus for equipment in get_all_equipped(self.owner))
+        if self.owner is player and player.fighter.run_status == 'running':
+            bonus -= 1
         return self.base_accuracy + bonus
 
     @property
@@ -346,6 +354,8 @@ class Fighter:
     @property
     def evasion(self):
         bonus = sum(equipment.evasion_bonus for equipment in get_all_equipped(self.owner))
+        if self.owner is player and player.fighter.run_status == 'running':
+            bonus += 2
         return self.base_evasion + bonus
 
     @property
@@ -389,6 +399,9 @@ class Fighter:
 
     # heal by the given amount, without going over maximum
     def heal(self, amount):
+        if player.fighter.run_status == 'running' or player.fighter.run_status == 'tired':
+            player.fighter.run_status = 'rested'
+            player.fighter.run_duration = RUN_DURATION
         self.hp += amount
         if self.hp > self.base_max_hp:
             self.hp = self.base_max_hp
@@ -396,20 +409,23 @@ class Fighter:
 # AI for melee monsters (chase, no ranged)
 class MeleeMonster:
     def take_turn(self):
+        move_chance = 100
+        if player.fighter.run_status == 'running':
+            move_chance -= 20
         # roll to see if monster moves
-        #if libtcod.random_get_int(0, 1, 100) < 85:
-        # a basic monster takes its turn. If monster sees player, chase
         monster = self.owner
-        if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
+        if libtcod.random_get_int(0, 1, 100) < move_chance:
+            # a basic monster takes its turn. If monster sees player, chase
+            if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
 
-            # move towards player if far away
-            if monster.distance_to(player) >= 2:
-                monster.clear()
-                monster.move_astar(player)
-            
-            # close enough, attack! (if the player is still alive)
-            elif player.fighter.hp > 0:
-                monster.fighter.attack(player)
+                # move towards player if far away
+                if monster.distance_to(player) >= 2:
+                    monster.clear()
+                    monster.move_astar(player)
+                
+                # close enough, attack! (if the player is still alive)
+                elif player.fighter.hp > 0:
+                    monster.fighter.attack(player)
         else: # if monster doesn't see player, move randomly
             monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
@@ -423,7 +439,7 @@ class CyborgAI:
                 if is_line_blocked_by_wall(monster.x, monster.y, player.x, player.y) is False:
                     atk_chance = libtcod.random_get_int(0, 1, 100)
 
-                    if atk_chance < 75: #chance to fire weapon, 75%
+                    if atk_chance < 25: #chance to fire weapon, 75% TODO: CHANGE THIS 
                         totalDamage = roll_dice(monster.fighter.ranged_damage)
                         # slope between player and reticule
                         dx = player.x
@@ -952,6 +968,8 @@ def basic_monster_death(monster):
     monster.ai = None
     monster.name = 'remains of ' + monster.name
     monster.z = CORPSE_Z_VAL
+    objects.append(monster)
+    del objects[objects.index(monster)]
 
     totalMonstersLeft = 0
     for obj in objects:
@@ -986,6 +1004,8 @@ def cyborg_death(monster):
     monster.ai = None
     monster.name = 'remains of ' + monster.name
     monster.z = CORPSE_Z_VAL
+    objects.append(monster)
+    del objects[objects.index(monster)]
 
     totalMonstersLeft = 0
     for obj in objects:
@@ -1141,12 +1161,20 @@ def display_chance_to_hit():
     enemy = get_fighter_by_tile(reticule.x, reticule.y)
     if enemy is not None and enemy is not player:
         chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
-        print('chance to hit: ' + str(chance_to_hit))
         string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
         libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, string)
 
 # display the player's stats to hud screen
 def display_player_stats():
+    # RUN_STATUS
+    if player.fighter.run_status == 'rested':
+        libtcod.console_set_default_foreground(hud_panel, libtcod.white)
+    elif player.fighter.run_status == 'running':
+        libtcod.console_set_default_foreground(hud_panel, libtcod.yellow)
+    elif player.fighter.run_status == 'tired':
+        libtcod.console_set_default_foreground(hud_panel, libtcod.grey)
+    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 - 1, libtcod.BKGND_NONE, libtcod.LEFT, player.fighter.run_status)
+
     # STR
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 + 1, libtcod.BKGND_NONE, libtcod.LEFT, 'STR: ')
@@ -1341,6 +1369,12 @@ def player_move_or_attack(dx, dy):
         player.fighter.attack(target)
     else:
         player.move(dx, dy)
+        if player.fighter.run_status == 'running':
+            if player.fighter.run_duration > 0:
+                player.fighter.run_duration -= 1
+            elif player.fighter.run_duration <= 0:
+                player.fighter.run_status = 'tired'
+                message('You become tired!', libtcod.red)
         fov_recompute = True
 
 # return the position of a tile left-clicked in player's FOV (optionally in a range), or (None, None) if right-clicked
@@ -1652,7 +1686,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
                     obj = get_object_by_tile(x, y)
-                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
+                    if is_blocked(x, y) and obj is not None and obj.fighter is not None and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
@@ -1869,6 +1903,15 @@ def handle_keys():
             if chosen_item is not None:
                 chosen_item.drop()
 
+        elif key.vk == libtcod.KEY_TAB:
+            # if player is rested, begin running. If running, stop running. If tired, display message saying "Can't run"
+            if player.fighter.run_status == 'rested':
+                player.fighter.run_status = 'running'
+            elif player.fighter.run_status == 'running':
+                player.fighter.run_status = 'tired'
+            elif player.fighter.run_status == 'tired':
+                message('You are too tired to run!', libtcod.red)
+
         else:
             # test for other keys
             key_char = chr(key.c)
@@ -1963,7 +2006,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, finesse=2, death_function=player_death)
+    fighter_component = Fighter(hp=10000, xp=0, accuracy=5, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
