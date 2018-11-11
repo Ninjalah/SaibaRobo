@@ -70,10 +70,11 @@ UNARMED_DAMAGE = '1d3'
 PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = '2d3'
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
-PISTOL_ACCURACY_BONUS = 2
+PISTOL_ACCURACY_BONUS = 1
 
 # Dagger
 DAGGER_DAMAGE = '2d4'
+DAGGER_ACCURACY_BONUS = 2
 
 #########################
 
@@ -407,7 +408,7 @@ class Fighter:
             self.hp = self.base_max_hp
 
 # AI for melee monsters (chase, no ranged)
-class MeleeMonster:
+class MeleeAI:
     def take_turn(self):
         move_chance = 100
         if player.fighter.run_status == 'running':
@@ -426,8 +427,8 @@ class MeleeMonster:
                 # close enough, attack! (if the player is still alive)
                 elif player.fighter.hp > 0:
                     monster.fighter.attack(player)
-        else: # if monster doesn't see player, move randomly
-            monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+            else: # if monster doesn't see player, move randomly
+                monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
 # AI for Cyborgs (ranged)
 class CyborgAI:
@@ -439,7 +440,7 @@ class CyborgAI:
                 if is_line_blocked_by_wall(monster.x, monster.y, player.x, player.y) is False:
                     atk_chance = libtcod.random_get_int(0, 1, 100)
 
-                    if atk_chance < 25: #chance to fire weapon, 75% TODO: CHANGE THIS 
+                    if atk_chance < 75: #chance to fire weapon, 75%
                         totalDamage = roll_dice(monster.fighter.ranged_damage)
                         # slope between player and reticule
                         dx = player.x
@@ -924,7 +925,7 @@ def create_pistol_equipment():
 
 # Create and return a dagger component
 def create_dagger_equipment():
-    return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE)
+    return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
 
 ################################
 ## Monster Creation Functions ##
@@ -1054,11 +1055,11 @@ def place_objects(room):
             choice = random_choice(monster_chances)
             if choice == 'terminatron':
                 fighter_component = create_terminatron_fighter_component()
-                ai_component = MeleeMonster()
+                ai_component = MeleeAI()
                 monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
                 fighter_component = create_mecharachnid_fighter_component()
-                ai_component = MeleeMonster()
+                ai_component = MeleeAI()
                 monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
                 fighter_component = create_cyborg_fighter_component()
@@ -1224,11 +1225,11 @@ def render_all():
     global fov_recompute
 
     # prepare to render the LOG panel
-    libtcod.console_set_default_background(log_panel, libtcod.black) # TODO: change this back to libtcod.black
+    libtcod.console_set_default_background(log_panel, libtcod.black)
     libtcod.console_clear(log_panel)
 
     # prepare to render the HUD panel
-    libtcod.console_set_default_background(hud_panel, libtcod.black) # TODO: change this back to libtcod.black
+    libtcod.console_set_default_background(hud_panel, libtcod.black)
     libtcod.console_clear(hud_panel)
  
     if fov_recompute:
@@ -1251,6 +1252,7 @@ def render_all():
                             libtcod.console_set_char_background(con, x, y, color_dark_ground, libtcod.BKGND_SET)
                 else:
                     #it's visible
+                    # TODO: scale lighting based on distance
                     if wall:
                         libtcod.console_set_char_background(con, x, y, color_light_wall, libtcod.BKGND_SET)
                     else:
@@ -1327,7 +1329,7 @@ def render_all():
     display_player_stats()
 
     # display dungeon level to GUI
-    libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT, 'Dungeon level ' + str(dungeon_level))
+    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2, SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.CENTER, 'Dungeon level ' + str(dungeon_level))
 
     # display names of objects under the mouse
     libtcod.console_set_default_foreground(hud_panel, libtcod.light_grey) #changed to light_gray
@@ -2006,7 +2008,7 @@ def new_game():
     reticule = None
 
     #create object representing the player
-    fighter_component = Fighter(hp=10000, xp=0, accuracy=5, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
