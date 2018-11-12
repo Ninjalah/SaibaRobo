@@ -503,7 +503,7 @@ class CyborgAI:
                                         hit_obj.fighter.take_damage(totalDamage)
                                         break
                                     if monsterFound is False:
-                                        message('The shot misses any meaningful target.', libtcod.red)
+                                        message('The ' + monster.name + '\'s shot misses!', libtcod.red)
                                     break
                                 elif is_blocked(x, y) and obj is None:
                                     #if libtcod.map_is_in_fov(fov_map, x, y):
@@ -513,7 +513,7 @@ class CyborgAI:
                                     sleep(PROJECTILE_SLEEP_TIME)
                                     hit_obj = get_fighter_by_tile(x, y)
                                     hasHit = True
-                                    message('The shot misses any meaningful target.', libtcod.red)
+                                    message('The ' + monster.name + '\'s shot misses!', libtcod.red)
                                     break
                                 else:
                                     libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
@@ -1164,12 +1164,17 @@ def display_ammo_count():
     libtcod.console_print_ex(hud_panel, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
 
 # display the chance to hit Fighter at Reticule
-def display_chance_to_hit():
-    enemy = get_fighter_by_tile(reticule.x, reticule.y)
-    if enemy is not None and enemy is not player:
-        chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
-        string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
-        libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, string)
+def display_info_at_reticule():
+    if game_state == 'aiming': # if aiming
+        enemy = get_fighter_by_tile(reticule.x, reticule.y)
+        if enemy is not None and enemy is not player:
+            chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
+            string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
+            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, string)
+    else: # if looking
+        obj = get_object_by_tile(reticule.x, reticule.y)
+        if obj is not None and obj is not reticule:
+            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, obj.name)
 
 # display the player's stats to hud screen
 def display_player_stats():
@@ -1282,7 +1287,8 @@ def render_all():
     player.draw() # draw the player object
     # draw the reticule object last (over the player)
     if reticule is not None:
-        display_chance_to_hit()
+        if libtcod.map_is_in_fov(fov_map, reticule.x, reticule.y) or map[reticule.x][reticule.y].explored:
+            display_info_at_reticule()
         reticule.draw()
         libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
         prev_x, prev_y = player.x, player.y
@@ -1564,7 +1570,7 @@ def closest_monster(max_range):
     return closest_enemy
 
 # player takes aim at a target tile
-def take_aim():
+def take_aim(key_char):
     global game_state, reticule
 
     monster = closest_monster(TORCH_RADIUS)
@@ -1573,10 +1579,16 @@ def take_aim():
     else:
         (x, y) = (player.x+1, player.y)
 
-    reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
+    reticule = Object(x, y, 'X', 'Reticule', libtcod.white, always_visible=True, z=RETICULE_Z_VAL)
+    if key_char == 'f': # if aiming
+        game_state = 'aiming'
+        reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
+        message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
+    elif key_char == 'l': # if looking
+        game_state = 'looking'
+        message('Press any key to cancel examining.', libtcod.cyan)
+        
     objects.append(reticule)
-    game_state = "aiming"
-    message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
 
 # clear all reticule segments between player and reticule
 def clear_reticule_segments():
@@ -1819,8 +1831,55 @@ def handle_keys():
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
         return 'didnt-take-turn'
  
-    elif key.vk == libtcod.KEY_ESCAPE and game_state is not 'aiming':
+    elif key.vk == libtcod.KEY_ESCAPE and game_state is not 'aiming' and game_state is not 'looking':
         return 'exit'  #exit game
+
+    if game_state == 'looking':
+        if key.vk == libtcod.KEY_UP:
+            move_reticule(0, -1)
+    
+        elif key.vk == libtcod.KEY_DOWN:
+            move_reticule(0, 1)
+    
+        elif key.vk == libtcod.KEY_LEFT:
+            move_reticule(-1, 0)
+    
+        elif key.vk == libtcod.KEY_RIGHT:
+            move_reticule(1, 0)
+
+        elif key.vk == libtcod.KEY_KP8:
+            move_reticule(0, -1)
+
+        elif key.vk == libtcod.KEY_KP2:
+            move_reticule(0, 1)
+
+        elif key.vk == libtcod.KEY_KP4:
+            move_reticule(-1, 0)
+
+        elif key.vk == libtcod.KEY_KP6:
+            move_reticule(1, 0)
+
+        elif key.vk == libtcod.KEY_KP1:
+            move_reticule(-1, 1)
+
+        elif key.vk == libtcod.KEY_KP7:
+            move_reticule(-1, -1)
+
+        elif key.vk == libtcod.KEY_KP9:
+            move_reticule(1, -1)
+
+        elif key.vk == libtcod.KEY_KP3:
+            move_reticule(1, 1)
+        else:
+            # test for other keys
+            key_char = chr(key.c)
+
+            # cancel look with any key
+            if key.c is not 0 and key.vk is not 0:
+                print('Cancelling look! ' + key_char)
+                game_state = 'playing'
+                remove_reticule()
+                return 'didnt-take-turn'
 
     if game_state == 'aiming':
         if key.vk == libtcod.KEY_UP:
@@ -1970,10 +2029,14 @@ def handle_keys():
             # use equipment; if ranged, call cast_shoot() function
             if key_char == 'f':
                 if get_equipped_in_slot('weapon') is not None and get_equipped_in_slot('weapon').is_ranged:
-                    if take_aim() is not 'cancelled':
+                    if take_aim(key_char) is not 'cancelled':
                         return 'turn-taken'
                 else:
                     message('No weapon to shoot with!', libtcod.red)
+
+            # call cast_look() function
+            if key_char == 'l':
+                take_aim(key_char)
 
             if key_char == '.' and key.shift:
                 # go down the stairs, if the player is on them
