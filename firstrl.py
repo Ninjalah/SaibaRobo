@@ -61,14 +61,14 @@ IMPACT_GRENADE_DAMAGE = 12
 #########################
 ## Fixed Weapon Values ##
 #########################
-PROJECTILE_SLEEP_TIME = 0.02
+PROJECTILE_SLEEP_TIME = 0.015
 
 # Fists/Unarmed
 UNARMED_DAMAGE = '1d3'
 
 # Pistol
 PISTOL_RANGED_DAMAGE = '2d4'
-PISTOL_MELEE_DAMAGE = '2d3'
+PISTOL_MELEE_DAMAGE = '1d3'
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
 PISTOL_ACCURACY_BONUS = 1
 
@@ -177,9 +177,11 @@ class Object:
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
             self.clear()
-            if (self.fighter is not None and (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2):
-                blooddrop = Object(self.x, self.y, '.', 'Droplet of blood', libtcod.red, always_visible=False, z=BLOODDROP_Z_VAL)
-                objects.append(blooddrop)
+            if self.fighter is not None:
+                self.fighter.has_moved_this_turn = True
+                if (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2:
+                    blooddrop = Object(self.x, self.y, '.', 'Droplet of blood', libtcod.red, always_visible=False, z=BLOODDROP_Z_VAL)
+                    objects.append(blooddrop)
 
             self.x += dx
             self.y += dy
@@ -286,7 +288,7 @@ class Object:
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
     def __init__(self, hp=0, strength=0, accuracy=0, finesse=0, evasion=0, armor=0, melee_damage=None, ranged_damage=None, xp=0, 
-        ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None, run_status=None, run_duration=0):
+        ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None, run_status=None, run_duration=0, has_moved_this_turn=False):
         self.base_max_hp = hp
         self.hp = hp
         self.base_strength = strength
@@ -302,6 +304,7 @@ class Fighter:
         self.max_ten_mm_rounds = max_ten_mm_rounds
         self.death_function = death_function
         self.run_status = run_status
+        self.has_moved_this_turn = has_moved_this_turn
 
     # return actual power, by summing up the bonuses from all equipped items
     @property
@@ -356,7 +359,9 @@ class Fighter:
     def evasion(self):
         bonus = sum(equipment.evasion_bonus for equipment in get_all_equipped(self.owner))
         if self.owner is player and player.fighter.run_status == 'running':
-            bonus += 2
+            bonus += 1
+        if self.owner is player and player.fighter.has_moved_this_turn:
+            bonus += 1
         return self.base_evasion + bonus
 
     @property
@@ -371,6 +376,7 @@ class Fighter:
 
     # a simple formula for attack damage
     def attack(self, target):
+        self.has_moved_this_turn = False
         if roll_to_hit(accuracy_bonus=self.accuracy, evasion_penalty=target.fighter.evasion):
             totalDamage = roll_dice(self.melee_damage)
             totalDamage -= target.fighter.armor
@@ -933,14 +939,13 @@ def create_dagger_equipment():
 
 # Create and return a teminatron fighter component
 def create_terminatron_fighter_component():
-    return Fighter(hp=100, armor=5, strength=13, melee_damage=TERMINATRON_MELEE_DAMAGE, xp=10000, death_function=basic_monster_death)
+    return Fighter(hp=100, armor=5, strength=13, accuracy=4, melee_damage=TERMINATRON_MELEE_DAMAGE, xp=10000, death_function=basic_monster_death)
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
-    return Fighter(hp=15, armor=1, strength=3, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
+    return Fighter(hp=15, armor=1, strength=3, accuracy=4, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
 
 # Create and return a cyborg fighter component
-# TODO: Finish ranged/melee damage for cyborgs
 def create_cyborg_fighter_component():
     return Fighter(hp=8, armor=0, strength=2, accuracy=2, xp=35, ranged_damage=CYBORG_RANGED_DAMAGE, death_function=cyborg_death)
 
@@ -981,14 +986,6 @@ def basic_monster_death(monster):
 
 # Cyborg death function (drop ammo, weapon)
 def cyborg_death(monster):
-    # drop ammo on death
-    (x, y) = get_unblocked_tile_around(monster.x, monster.y)
-    ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
-    if x is not None and ammo_drop_chance < 75:
-        item_component = Item()
-        item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
-        objects.append(item)
-
     # drop pistol on death
     (x, y) = get_unblocked_tile_around(monster.x, monster.y)
     pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
@@ -996,6 +993,15 @@ def cyborg_death(monster):
         equipment_component = create_pistol_equipment()
         item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
+
+    # drop ammo on death
+    (x, y) = get_unblocked_tile_around(monster.x, monster.y)
+    ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
+    if x is not None and ammo_drop_chance < 75:
+        item_component = Item()
+        item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
+        objects.append(item)
+        item.send_to_back()
 
     message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
     monster.char = '%'
@@ -1175,6 +1181,14 @@ def display_player_stats():
     elif player.fighter.run_status == 'tired':
         libtcod.console_set_default_foreground(hud_panel, libtcod.grey)
     libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/3 - 1, libtcod.BKGND_NONE, libtcod.LEFT, player.fighter.run_status)
+
+    # MOVE STATUS
+    if player.fighter.has_moved_this_turn is True:
+        libtcod.console_set_default_foreground(hud_panel, libtcod.yellow)
+        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2, SCREEN_HEIGHT/3 - 1, libtcod.BKGND_NONE, libtcod.CENTER, 'moving')
+    else:
+        libtcod.console_set_default_foreground(hud_panel, libtcod.white)
+        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2, SCREEN_HEIGHT/3 - 1, libtcod.BKGND_NONE, libtcod.CENTER, 'standing')
 
     # STR
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
@@ -1851,6 +1865,7 @@ def handle_keys():
             # shoot if Player presses F while aiming
             if key_char == 'f':
                 if cast_shoot(reticule.x, reticule.y) is not 'cancelled':
+                    player.fighter.has_moved_this_turn = False
                     return 'turn-taken'
                 else:
                     return 'didnt-take-turn'
@@ -1897,15 +1912,18 @@ def handle_keys():
             player_move_or_attack(1, 1)
 
         elif key.vk == libtcod.KEY_KP5: #player does nothing, same as "Wait"
+            player.fighter.has_moved_this_turn = False
             pass
 
         elif key.vk == libtcod.KEY_BACKSPACE:
+            player.fighter.has_moved_this_turn = False
             # show the inventory; if an item is selected, drop it
             chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
             if chosen_item is not None:
                 chosen_item.drop()
 
         elif key.vk == libtcod.KEY_TAB:
+            player.fighter.has_moved_this_turn = False
             # if player is rested, begin running. If running, stop running. If tired, display message saying "Can't run"
             if player.fighter.run_status == 'rested':
                 player.fighter.run_status = 'running'
@@ -1919,10 +1937,10 @@ def handle_keys():
             key_char = chr(key.c)
 
             if key_char == 'g':
-
                 # pick up an item
                 for object in objects: #look for an item in the player's tile
                     if object.x == player.x and object.y == player.y and object.item:
+                        player.fighter.has_moved_this_turn = False
                         object.item.pick_up()
                         return 'turn-taken'
 
@@ -1930,6 +1948,7 @@ def handle_keys():
                 # show the inventory; if an item is selected, use it
                 chosen_item = inventory_menu('Press the key next to an item to use it, or any other to cancel.\n')
                 if chosen_item is not None:
+                    player.fighter.has_moved_this_turn = False
                     chosen_item.use()
                     return 'turn-taken'
 
@@ -1944,6 +1963,7 @@ def handle_keys():
 
             if key_char == 'r':
                 # reload current weapon
+                player.fighter.has_moved_this_turn = False
                 if cast_reload() is not 'cancelled':
                     return 'turn-taken'
 
@@ -1958,6 +1978,7 @@ def handle_keys():
             if key_char == '.' and key.shift:
                 # go down the stairs, if the player is on them
                 if stairs.x == player.x and stairs.y == player.y:
+                    player.fighter.has_moved_this_turn = False
                     next_level()
 
             return 'didnt-take-turn'
@@ -2049,12 +2070,9 @@ def new_game():
 # advance to the next level
 def next_level():
     global dungeon_level
-    # heal the player by 50%
-    message('You take a moment to rest, and recover your strength.', libtcod.light_violet)
-    player.fighter.heal(player.fighter.base_max_hp / 2)
 
     dungeon_level += 1
-    message('After a rare moment of peace, you descend deeper into the facility...', libtcod.red)
+    message('You descend deeper into the facility...', libtcod.red)
     make_map() # create a new level!
     initialize_fov()
 
