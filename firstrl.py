@@ -55,7 +55,7 @@ LIGHTNING_DAMAGE = 20
 LIGHTNING_RANGE = 5
 CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
-IMPACT_GRENADE_RADIUS = 3
+IMPACT_GRENADE_RADIUS = 5
 IMPACT_GRENADE_DAMAGE = 12
 
 #########################
@@ -556,12 +556,14 @@ class ConfusedMonster:
 
 # an item that can be picked up and used
 class Item:
-    def __init__(self, use_function=None):
+    def __init__(self, use_function=None, shootable=False, is_being_used=False):
         self.use_function = use_function
+        self.is_being_used = is_being_used
+        self.shootable = shootable
 
     def pick_up(self):
         # add to the player's inventory and remove from map
-        if self.owner.capacity is not None: # if ammo, add to player's ammo
+        if self.owner.capacity is not None: # if ammo, add to player's ammo TODO: Generalize this function
             if "10mm" in self.owner.name: # if the item we're picking up is 10mm ammo
                 amount_to_pickup = player.fighter.max_ten_mm_rounds - player.fighter.ten_mm_rounds
                 if amount_to_pickup > 0: # if we can pick up some ammo
@@ -609,7 +611,8 @@ class Item:
             message('The ' + self.owner.name + ' cannot be used.')
         else:
             if self.use_function() != 'cancelled':
-                inventory.remove(self.owner) # destroy after use, unless it was cancelled for some reason
+                if self.shootable is False:
+                    inventory.remove(self.owner) # destroy after use, unless it was cancelled for some reason
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
@@ -933,6 +936,21 @@ def create_pistol_equipment():
 def create_dagger_equipment():
     return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
 
+#############################
+## Item Creation Functions ##
+#############################
+def create_health_pack_item_component():
+    return Item(use_function=cast_heal)
+
+def create_lightning_device_item_component():
+    return Item(use_function=cast_lightning)
+
+def create_emp_device_item_component():
+    return Item(use_function=cast_EMP_device)
+
+def create_impact_grenade_item_component():
+    return Item(use_function=cast_aim_impact_grenade, shootable=True)
+
 ################################
 ## Monster Creation Functions ##
 ################################
@@ -1087,19 +1105,19 @@ def place_objects(room):
             choice = random_choice(item_chances)
             if choice == 'heal':
                 # create a health pack
-                item_component = Item(use_function=cast_heal)
+                item_component = create_health_pack_item_component()
                 item = Object(x, y, '+', 'Health Pack', libtcod.violet, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'lightning':
                 # create a lightning device
-                item_component = Item(use_function=cast_lightning)
+                item_component = create_lightning_device_item_component()
                 item = Object(x, y, '#', 'Lightning Device', libtcod.light_blue, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'emp':
                 # create an emp device
-                item_component = Item(use_function=cast_EMP_device)
+                item_component = create_emp_device_item_component()
                 item = Object(x, y, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'impact_grenade':
                 # create an impact grenade
-                item_component = Item(use_function=cast_impact_grenade)
+                item_component = create_impact_grenade_item_component()
                 item = Object(x, y, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'dagger':
                 # create an energy dagger
@@ -1571,7 +1589,7 @@ def closest_monster(max_range):
 
 # player takes aim at a target tile
 def take_aim(key_char):
-    global game_state, reticule
+    global game_state, reticule, is_aiming_item
 
     monster = closest_monster(TORCH_RADIUS)
     if monster is not None:
@@ -1579,14 +1597,19 @@ def take_aim(key_char):
     else:
         (x, y) = (player.x+1, player.y)
 
-    reticule = Object(x, y, 'X', 'Reticule', libtcod.white, always_visible=True, z=RETICULE_Z_VAL)
-    if key_char == 'f': # if aiming
+    reticule = Object(x, y, 'X', 'Reticule', libtcod.red, always_visible=True, z=RETICULE_Z_VAL)
+    if is_aiming_item == False:
+        if key_char == 'f': # if aiming
+            game_state = 'aiming'
+            reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
+            message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
+        elif key_char == 'l': # if looking
+            game_state = 'looking'
+            Object(x, y, 'X', 'Reticule', libtcod.white, always_visible=True, z=RETICULE_Z_VAL)
+            message('Press any key to cancel examining.', libtcod.cyan)
+    else:
         game_state = 'aiming'
-        reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
-        message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
-    elif key_char == 'l': # if looking
-        game_state = 'looking'
-        message('Press any key to cancel examining.', libtcod.cyan)
+        message('Press any key to cancel using item.', libtcod.cyan)
         
     objects.append(reticule)
 
@@ -1648,16 +1671,43 @@ def cast_EMP_device():
         message('The ' + monster.name + ' starts to go haywire, stumbling around!', libtcod.light_green)
 
 # ask the player for a target tile to throw an impact grenade at
-def cast_impact_grenade():
-    message('Left-click a target tile to throw the impact grenade, or right-click to cancel.', libtcod.light_cyan)
-    (x, y) = target_tile()
-    if x is None: return 'cancelled'
+def cast_impact_grenade(dx, dy, item):
+    print('In cast_impact_grenade')
+    global is_aiming_item
+
+    if dx is None: return 'cancelled'
+
+    # if there is a blocking tile between player and reticule, explode at that blocking tile instead
+    libtcod.line_init(player.x, player.y, dx, dy)
+    x, y = libtcod.line_step()
+    while (x is not None and x != dx):
+        if is_blocked(x, y):
+            (dx, dy) = (x, y)
+            break
+        x, y = libtcod.line_step()
+
     message('The impact grenade explodes, burning everything within ' + str(IMPACT_GRENADE_RADIUS) + ' tiles!', libtcod.orange)
 
     for obj in objects: # damage every fighter in range, including the player
-        if obj.distance(x, y) <= IMPACT_GRENADE_RADIUS and obj.fighter:
+        # TODO: DEBUGGING, REMOVE
+        # BUG: For some reason, if two or more mobs are hit with a single grenade, sometimes, one doesn't take any damage
+        print('obj: ' + obj.name + ' dist to grenade: ' + str(obj.distance(dx, dy)))
+        if obj.distance(dx, dy) <= float(IMPACT_GRENADE_RADIUS) and obj.fighter:
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
+
+    is_aiming_item = False
+    inventory.remove(item)
+
+# aim the impact grenade using the reticule
+def cast_aim_impact_grenade():
+    print('In cast_aim_impact_grenade')
+    global is_aiming_item, game_state
+
+    is_aiming_item = True
+    i = find_in_inventory('Impact Grenade')
+    i.item.is_being_used = True
+    take_aim(None)
 
 # shoot pistol at tile (dx, dy)
 def cast_shoot_pistol(dx, dy, weapon):
@@ -1766,7 +1816,16 @@ def cast_shoot(dx, dy):
     render_all()
     weapon = get_equipped_in_slot('weapon')
     return weapon.shoot_function(dx, dy, weapon)
-    
+
+# shoot currently used item at tile (dx, dy)
+def cast_shoot_item(dx, dy, item):
+    remove_reticule()
+    render_all()
+
+    # cases for which item to fire
+    if item.name == 'Impact Grenade':
+        cast_impact_grenade(dx, dy, item)
+
 # reload the weapon in your right hand
 def cast_reload():
     weapon = get_equipped_in_slot('weapon')
@@ -1800,6 +1859,7 @@ def msgbox(text, width=50):
 # finds an object in inventory, retrieves it
 def find_in_inventory(obj_str):
     for item in inventory:
+        print('Item: ' + item.name)
         if item.name == obj_str:
             return item
     
@@ -1824,7 +1884,7 @@ def remove_reticule():
 
 # handle player inputs
 def handle_keys():
-    global fov_recompute, key, reticule, game_state
+    global fov_recompute, key, reticule, game_state, inventory, is_aiming_item
  
     if key.vk == libtcod.KEY_ENTER and key.ralt:
         #Alt+Enter: toggle fullscreen
@@ -1920,16 +1980,28 @@ def handle_keys():
         else:
             # test for other keys
             key_char = chr(key.c)
+            item = next((i for i in inventory if i.item.is_being_used == True), None)
 
             # shoot if Player presses F while aiming
             if key_char == 'f':
-                if cast_shoot(reticule.x, reticule.y) is not 'cancelled':
-                    player.fighter.has_moved_this_turn = False
-                    return 'turn-taken'
-                else:
-                    return 'didnt-take-turn'
+                if is_aiming_item is False: # if not aiming an item
+                    if cast_shoot(reticule.x, reticule.y) is not 'cancelled':
+                        player.fighter.has_moved_this_turn = False
+                        return 'turn-taken'
+                    else:
+                        return 'didnt-take-turn'
+                elif is_aiming_item is True: # if you are aiming an item
+                    print('Item is ' + str(item))
+                    if item is not None and cast_shoot_item(reticule.x, reticule.y, item) is not 'cancelled':
+                        player.fighter.has_moved_this_turn = False
+                        return 'turn-taken'
+                    else:
+                        return 'didnt-take-turn'
             elif key_char is not 'f' and key.c is not 0 and key.vk is not 0:
                 remove_reticule()
+                if item is not None:
+                    item.item.is_being_used = False
+                is_aiming_item = False
                 return 'didnt-take-turn'
 
     if game_state == 'playing':
@@ -2086,11 +2158,14 @@ def load_game():
 
 # START A NEW GAME
 def new_game():
-    global player, inventory, game_msgs, game_state, dungeon_level, reticule
+    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item
 
     #create empty reticule object
     reticule = None
 
+    # if aiming and this value is not None, then use this item as the object when aiming/firing
+    is_aiming_item = False
+    
     #create object representing the player
     fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
@@ -2123,6 +2198,11 @@ def new_game():
     obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
+
+    # TODO: REMOVE THIS, TESTING
+    item_component = create_impact_grenade_item_component()
+    item = Object(0, 0, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+    inventory.append(item)
 
     # # initial equipment: a dagger
     #equipment_component = Equipment(slot='weapon', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
