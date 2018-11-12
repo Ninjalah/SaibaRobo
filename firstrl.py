@@ -1598,15 +1598,14 @@ def take_aim(key_char):
         (x, y) = (player.x+1, player.y)
 
     reticule = Object(x, y, 'X', 'Reticule', libtcod.red, always_visible=True, z=RETICULE_Z_VAL)
-    if is_aiming_item == False:
-        if key_char == 'f': # if aiming
-            game_state = 'aiming'
-            reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
-            message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
-        elif key_char == 'l': # if looking
-            game_state = 'looking'
-            Object(x, y, 'X', 'Reticule', libtcod.white, always_visible=True, z=RETICULE_Z_VAL)
-            message('Press any key to cancel examining.', libtcod.cyan)
+    if key_char == 'f': # if aiming
+        game_state = 'aiming'
+        reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
+        message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
+    elif key_char == 'l': # if looking
+        game_state = 'looking'
+        reticule = Object(x, y, 'X', 'Reticule', libtcod.white, always_visible=True, z=RETICULE_Z_VAL)
+        message('Press any key to cancel examining.', libtcod.cyan)
     else:
         game_state = 'aiming'
         message('Press any key to cancel using item.', libtcod.cyan)
