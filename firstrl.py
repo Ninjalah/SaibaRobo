@@ -74,7 +74,7 @@ PISTOL_ACCURACY_BONUS = 1
 
 # Dagger
 DAGGER_DAMAGE = '2d4'
-DAGGER_ACCURACY_BONUS = 2
+DAGGER_ACCURACY_BONUS = 3
 
 #########################
 
@@ -1042,22 +1042,22 @@ def place_objects(room):
     global monster_chances, item_chances, objects
 
     # max number of monsters per room
-    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
+    max_monsters = from_dungeon_level([[3, 1], [5, 3], [7, 5]])
 
     # chance of each mosnter
     monster_chances = {}
     monster_chances['cyborg'] = 70
-    monster_chances['mecharachnid'] = from_dungeon_level([[10, 1], [25, 3], [50, 5]])
-    monster_chances['terminatron'] = from_dungeon_level([[3, 1], [5, 3], [8, 5]])
+    monster_chances['mecharachnid'] = from_dungeon_level([[29, 1], [25, 3], [50, 5]])
+    monster_chances['terminatron'] = from_dungeon_level([[1, 1], [5, 3], [8, 5]])
 
     # maximum number of items per room
-    max_items = from_dungeon_level([[1, 1], [2, 4]])
+    max_items = from_dungeon_level([[2, 1], [3, 3]])
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['heal'] = from_dungeon_level([[55, 1]])
-    item_chances['lightning'] = from_dungeon_level([[0, 1], [5, 4]])
-    item_chances['impact_grenade'] = from_dungeon_level([[0, 1], [5, 6]])
+    item_chances['heal'] = from_dungeon_level([[40, 1]])
+    item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
+    item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[10, 1]])
@@ -1120,7 +1120,7 @@ def place_objects(room):
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = create_dagger_equipment()
-                item = Object(x, y, 'i', 'Dagger', libtcod.green, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '/', 'Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = create_pistol_equipment()
@@ -2194,14 +2194,14 @@ def new_game():
     equipment_component.equip()
 
     # TODO: REMOVE THIS, TESTING
-    item_component = create_impact_grenade_item_component()
-    item = Object(0, 0, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
-    inventory.append(item)
+    #item_component = create_impact_grenade_item_component()
+    #item = Object(0, 0, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+    #inventory.append(item)
 
     # TODO: REMOVE THIS, TESTING
-    item_component = create_emp_device_item_component()
-    item = Object(0, 0, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
-    inventory.append(item)
+    #item_component = create_emp_device_item_component()
+    #item = Object(0, 0, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+    #inventory.append(item)
 
     # # initial equipment: a dagger
     #equipment_component = Equipment(slot='weapon', is_ranged=False, melee_power_bonus=DAGGER_DAMAGE)
