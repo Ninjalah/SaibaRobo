@@ -42,7 +42,7 @@ MAX_ROOMS = 99 # this was 30
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
-LEVEL_UP_BASE = 2000
+LEVEL_UP_BASE = 20000
 LEVEL_UP_FACTOR = 150
 LEVEL_UP_XP = LEVEL_UP_BASE + LEVEL_UP_FACTOR
 
@@ -61,7 +61,7 @@ IMPACT_GRENADE_DAMAGE = 12
 #########################
 ## Fixed Weapon Values ##
 #########################
-PROJECTILE_SLEEP_TIME = 0.015
+PROJECTILE_SLEEP_TIME = 0.01
 
 # Fists/Unarmed
 UNARMED_DAMAGE = '1d3'
@@ -992,8 +992,7 @@ def basic_monster_death(monster):
     monster.ai = None
     monster.name = 'remains of ' + monster.name
     monster.z = CORPSE_Z_VAL
-    objects.append(monster)
-    del objects[objects.index(monster)]
+    monster.send_to_back()
 
     totalMonstersLeft = 0
     for obj in objects:
@@ -1029,8 +1028,7 @@ def cyborg_death(monster):
     monster.ai = None
     monster.name = 'remains of ' + monster.name
     monster.z = CORPSE_Z_VAL
-    objects.append(monster)
-    del objects[objects.index(monster)]
+    monster.send_to_back()
 
     totalMonstersLeft = 0
     for obj in objects:
@@ -1041,7 +1039,7 @@ def cyborg_death(monster):
 
 # this is where we decide the chance of each monster or item appearing
 def place_objects(room):
-    global monster_chances, item_chances
+    global monster_chances, item_chances, objects
 
     # max number of monsters per room
     max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
@@ -1671,8 +1669,7 @@ def cast_EMP_device():
 
 # ask the player for a target tile to throw an impact grenade at
 def cast_impact_grenade(dx, dy, item):
-    print('In cast_impact_grenade')
-    global is_aiming_item
+    global is_aiming_item, objects
 
     if dx is None: return 'cancelled'
 
@@ -1688,10 +1685,7 @@ def cast_impact_grenade(dx, dy, item):
     message('The impact grenade explodes, burning everything within ' + str(IMPACT_GRENADE_RADIUS) + ' tiles!', libtcod.orange)
 
     for obj in objects: # damage every fighter in range, including the player
-        # TODO: DEBUGGING, REMOVE
-        # BUG: For some reason, if two or more mobs are hit with a single grenade, sometimes, one doesn't take any damage
-        print('obj: ' + obj.name + ' dist to grenade: ' + str(obj.distance(dx, dy)))
-        if obj.distance(dx, dy) <= float(IMPACT_GRENADE_RADIUS) and obj.fighter:
+        if obj.fighter and obj.distance(dx, dy) <= IMPACT_GRENADE_RADIUS:
             message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
@@ -1700,7 +1694,6 @@ def cast_impact_grenade(dx, dy, item):
 
 # aim the impact grenade using the reticule
 def cast_aim_impact_grenade():
-    print('In cast_aim_impact_grenade')
     global is_aiming_item, game_state
 
     is_aiming_item = True
@@ -2157,13 +2150,15 @@ def load_game():
 
 # START A NEW GAME
 def new_game():
-    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item
+    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
 
     #create empty reticule object
     reticule = None
 
     # if aiming and this value is not None, then use this item as the object when aiming/firing
     is_aiming_item = False
+
+    objects = []
     
     #create object representing the player
     fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
@@ -2201,6 +2196,11 @@ def new_game():
     # TODO: REMOVE THIS, TESTING
     item_component = create_impact_grenade_item_component()
     item = Object(0, 0, '#', 'Impact Grenade', libtcod.light_red, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+    inventory.append(item)
+
+    # TODO: REMOVE THIS, TESTING
+    item_component = create_emp_device_item_component()
+    item = Object(0, 0, '#', 'EMP Device', libtcod.light_yellow, item=item_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(item)
 
     # # initial equipment: a dagger
