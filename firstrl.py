@@ -1094,12 +1094,12 @@ def place_objects(room):
     item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
 
     # maximum number of traps
-    max_traps = from_dungeon_level([[22, 1]])
+    max_traps = from_dungeon_level([[2, 1]])
 
     # chance of each trap spawning
     trap_chances = {}
-    trap_chances['none'] = from_dungeon_level([[1, 1]]) # TODO: Fix these numbers
-    trap_chances['explosive_trap'] = from_dungeon_level([[100, 1]])
+    trap_chances['none'] = from_dungeon_level([[90, 1]]) # TODO: Fix these numbers
+    trap_chances['explosive_trap'] = from_dungeon_level([[10, 1]])
 
     # choose random number of traps
     num_traps = libtcod.random_get_int(0, 0, max_traps)
@@ -1914,6 +1914,8 @@ def cast_reload():
 ############################
 # TODO: Finish explosive trap
 def trigger_explosive_trap(dx, dy):
+    global fov_map
+
     fighter = get_fighter_by_tile(dx, dy)
     if fighter is not None:
         message('The tile underneath ' + fighter.name + ' explodes!', libtcod.orange)
