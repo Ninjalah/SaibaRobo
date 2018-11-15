@@ -29,10 +29,11 @@ CHARACTER_SCREEN_WIDTH = 30
 # Z-Axis values
 BLOODDROP_Z_VAL = 0
 CORPSE_Z_VAL = 1
-STAIRS_Z_VAL = 2
-ITEM_Z_VAL = 3
-MONSTER_Z_VAL = 4
-PLAYER_Z_VAL = 5
+TRAP_Z_VAL = 2
+STAIRS_Z_VAL = 3
+ITEM_Z_VAL = 4
+MONSTER_Z_VAL = 5
+PLAYER_Z_VAL = 6
 RETICULE_Z_VAL = 99
  
 # parameters for dungeon generator (num of monsters, items, etc.)
@@ -142,7 +143,7 @@ class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
     # TODO: Remove max_capacity from game? Currently no purpose.
-    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, z=0):
+    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, trap=None, z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -164,6 +165,10 @@ class Object:
         self.item = item
         if self.item: # let the Item component know who owns it
             self.item.owner = self
+
+        self.trap = trap
+        if self.trap: # let the Trap component know who owns it
+            self.trap.owner = self
 
         self.equipment = equipment
         if self.equipment: #let the Equipment component know who owns it
@@ -664,6 +669,18 @@ class Equipment:
             if self.use_function() != 'cancelled':
                 return
 
+# a trap that triggers when walked over
+class Trap:
+    def __init__(self, is_triggered=False, trigger_function=None):
+        self.is_triggered = is_triggered
+        self.trigger_function = trigger_function
+
+    def trigger(self):
+        if self.trigger_function is None:
+            message('You hear a click, but nothing happens.')
+        else:
+            self.trigger_function(self.owner.x, self.owner.y)
+
 ########################
 # FUNCTION DEFINITIONS #
 ########################
@@ -709,6 +726,13 @@ def get_object_by_tile(x, y):
 def get_fighter_by_tile(x, y):
     for obj in objects:
         if (obj.x, obj.y) == (x, y) and obj.fighter:
+            return obj
+    return None
+
+# returns a trap by tile
+def get_trap_by_tile(x, y):
+    for obj in objects:
+        if obj.trap and (obj.x, obj.y) == (x, y):
             return obj
     return None
 
@@ -951,6 +975,12 @@ def create_emp_device_item_component():
 def create_impact_grenade_item_component():
     return Item(use_function=cast_aim_impact_grenade, shootable=True)
 
+#############################
+## Trap Creation Functions ##
+#############################
+def create_explosive_trap_component():
+    return Trap(is_triggered=False, trigger_function=trigger_explosive_trap)
+
 ################################
 ## Monster Creation Functions ##
 ################################
@@ -1039,7 +1069,7 @@ def cyborg_death(monster):
 
 # this is where we decide the chance of each monster or item appearing
 def place_objects(room):
-    global monster_chances, item_chances, objects
+    global monster_chances, item_chances, trap_chances, objects
 
     # max number of monsters per room
     max_monsters = from_dungeon_level([[3, 1], [5, 3], [7, 5]])
@@ -1062,6 +1092,35 @@ def place_objects(room):
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[10, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
+
+    # maximum number of traps
+    max_traps = from_dungeon_level([[22, 1]])
+
+    # chance of each trap spawning
+    trap_chances = {}
+    trap_chances['none'] = from_dungeon_level([[1, 1]]) # TODO: Fix these numbers
+    trap_chances['explosive_trap'] = from_dungeon_level([[100, 1]])
+
+    # choose random number of traps
+    num_traps = libtcod.random_get_int(0, 0, max_traps)
+
+    for i in range(num_traps):
+        # choose random spot for this trap
+        x = libtcod.random_get_int(0, room.x1+1, room.x2-1)
+        y = libtcod.random_get_int(0, room.y1+1, room.y2-1)
+
+        # only place it if the tile is NOT BLOCKED
+        if not is_blocked(x, y):
+            choice = random_choice(trap_chances)
+            if choice is not 'none':
+                if choice == 'explosive_trap':
+                    # create an explosive trap
+                    trap_component = create_explosive_trap_component()
+                    trap = Object(x, y, ' ', 'Explosive Trap', libtcod.red, blocks=False, trap=trap_component, always_visible=True, z=TRAP_Z_VAL)
+
+                if trap is not None:
+                    print('Adding trap...')
+                    objects.append(trap)
 
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
@@ -1414,6 +1473,12 @@ def player_move_or_attack(dx, dy):
                 player.fighter.run_status = 'tired'
                 message('You become tired!', libtcod.red)
         fov_recompute = True
+
+        trap = get_trap_by_tile(player.x, player.y)
+        if trap is not None and trap.trap.is_triggered is False:
+            trap.char = '^'
+            trap.trap.is_triggered = True
+            trap.trap.trigger_function(player.x, player.y)
 
 # return the position of a tile left-clicked in player's FOV (optionally in a range), or (None, None) if right-clicked
 def target_tile(max_range=None):
@@ -1843,6 +1908,19 @@ def cast_reload():
     elif ammo_to_reload is False:
         message('No ammo!', libtcod.red)
         return 'cancelled'
+
+############################
+## Trap Trigger Functions ##
+############################
+# TODO: Finish explosive trap
+def trigger_explosive_trap(dx, dy):
+    fighter = get_fighter_by_tile(dx, dy)
+    if fighter is not None:
+        message('The tile underneath ' + fighter.name + ' explodes!', libtcod.orange)
+        for obj in objects: # damage every fighter in range, including the player
+            if obj.fighter and obj.distance(dx, dy) <= IMPACT_GRENADE_RADIUS:
+                message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
+                obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
 
 # a box for messages straight to MAIN MENU
 def msgbox(text, width=50):
