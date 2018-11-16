@@ -57,7 +57,7 @@ LIGHTNING_RANGE = 5
 CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 5
-IMPACT_GRENADE_DAMAGE = 12
+IMPACT_GRENADE_DAMAGE = '4d6+10'
 
 #########################
 ## Fixed Weapon Values ##
@@ -740,6 +740,10 @@ def get_trap_by_tile(x, y):
 def point_to_point_vector(start_x, start_y, end_x, end_y):
     return (end_x - start_x, end_y - start_y)
 
+# checks to see if there is a blocking tile between (x, y) and (dx, dy)
+def has_blocking_tiles_intersect(x, y, dx, dy):
+    
+
 def create_room(room):
     global map
     #go through the tiles in the rectangle and make them passable
@@ -1072,7 +1076,7 @@ def place_objects(room):
     global monster_chances, item_chances, trap_chances, objects
 
     # max number of monsters per room
-    max_monsters = from_dungeon_level([[3, 1], [5, 3], [7, 5]])
+    max_monsters = from_dungeon_level([[2, 1], [5, 3], [7, 5]])
 
     # chance of each mosnter
     monster_chances = {}
@@ -1098,8 +1102,8 @@ def place_objects(room):
 
     # chance of each trap spawning
     trap_chances = {}
-    trap_chances['none'] = from_dungeon_level([[90, 1]]) # TODO: Fix these numbers
-    trap_chances['explosive_trap'] = from_dungeon_level([[10, 1]])
+    trap_chances['none'] = from_dungeon_level([[95, 1]])
+    trap_chances['explosive_trap'] = from_dungeon_level([[555, 1]]) # TODO: DEBUGGING, CHANGE
 
     # choose random number of traps
     num_traps = libtcod.random_get_int(0, 0, max_traps)
@@ -1751,8 +1755,9 @@ def cast_impact_grenade(dx, dy, item):
 
     for obj in objects: # damage every fighter in range, including the player
         if obj.fighter and obj.distance(dx, dy) <= IMPACT_GRENADE_RADIUS:
-            message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
-            obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
+            totalDamage = roll_dice(IMPACT_GRENADE_DAMAGE)
+            message('The ' + obj.name + ' gets burned for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+            obj.fighter.take_damage(totalDamage)
 
     is_aiming_item = False
     inventory.remove(item)
@@ -1920,9 +1925,10 @@ def trigger_explosive_trap(dx, dy):
     if fighter is not None:
         message('The tile underneath ' + fighter.name + ' explodes!', libtcod.orange)
         for obj in objects: # damage every fighter in range, including the player
-            if obj.fighter and obj.distance(dx, dy) <= IMPACT_GRENADE_RADIUS:
-                message('The ' + obj.name + ' gets burned for ' + str(IMPACT_GRENADE_DAMAGE) + ' hit points.', libtcod.orange)
-                obj.fighter.take_damage(IMPACT_GRENADE_DAMAGE)
+            if obj.fighter and has_blocking_tiles_intersect(fighter.x, fighter.y, dx, dy) is False and obj.distance(dx, dy) <= IMPACT_GRENADE_RADIUS:
+                totalDamage = roll_dice(IMPACT_GRENADE_DAMAGE)
+                message('The ' + obj.name + ' gets burned for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                obj.fighter.take_damage(totalDamage)
 
 # a box for messages straight to MAIN MENU
 def msgbox(text, width=50):
