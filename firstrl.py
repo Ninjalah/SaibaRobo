@@ -622,7 +622,7 @@ class Item:
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
     def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, max_ammo=0, ammo=0, melee_damage=None, ranged_damage=None, 
-        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0):
+        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0, quality=None):
         self.slot = slot
         self.melee_damage = melee_damage
         self.ranged_damage = ranged_damage
@@ -638,6 +638,7 @@ class Equipment:
         self.ammo = ammo
         self.max_range = range
         self.shoot_function = shoot_function
+        self.quality = quality
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -739,6 +740,10 @@ def get_trap_by_tile(x, y):
 # take two points, return the vector between them
 def point_to_point_vector(start_x, start_y, end_x, end_y):
     return (end_x - start_x, end_y - start_y)
+
+# get the distance between two points
+def get_dist_between_points(x1, y1, x2, y2):
+    return math.hypot(x2 - x1, y2 - x1)
 
 def create_room(room):
     global map
@@ -887,24 +892,38 @@ def d(sides):
     return libtcod.random_get_int(0, 1, sides)
 
 # throw n dice of SIDES sides
-# NOTE: d_str = 'nds+b' ex: 2d4+1
+# NOTE: d_str = 'nds+b' ex: 2d4+1, p is the sign
 # n = number of dice
 # s = number of sides
 # b = bonus
+# p = sign
 def roll_dice(d_str):
+    print('D_str: ' + d_str)
     d_arr = d_str.split('d')
     n = int(d_arr[0])
     s = d_arr[1]
     b = None
+    p = ''
     if '+' in s:
         b = s.split('+')
         s = b[0]
         b = int(b[1])
+        p = '+'
+    elif '-' in s:
+        b = s.split('-')
+        s = b[0]
+        b = int(b[1])
+        p = '-'
     vals = []
     for i in range (n):
         vals.append(d(int(s)))
 
-    return sum(vals) if b is None else sum(vals) + b
+    if b is None:
+        return sum(vals)
+    elif p is '+':
+        return sum(vals) + b
+    elif p is '-':
+        return sum(vals) - b
 
 # helper function to return (min, max) damage of a dice roll
 def get_min_max_dmg(d_str):
@@ -912,10 +931,17 @@ def get_min_max_dmg(d_str):
     n = int(d_arr[0])
     s = d_arr[1]
     b = None
+    p = ''
     if '+' in s:
         b = s.split('+')
         s = b[0]
         b = int(b[1])
+        p = '+'
+    elif '-' in s:
+        b = s.split('-')
+        s = b[0]
+        b = int(b[1])
+        p = '-'
 
     min = 0
     max = 0
@@ -927,7 +953,12 @@ def get_min_max_dmg(d_str):
     for i in range(n):
         max += int(s)
 
-    return (min, max) if b is None else (min+b, max+b)
+    if b is None:
+        return (min, max)
+    elif p is '+':
+        return (min+b, max+b)
+    elif p is '-':
+        return (min-b, max-b)
 
 # roll to hit. Base chance is 50%. Adds player's accuracy bonus
 def roll_to_hit(accuracy_bonus=0, evasion_penalty=0):
@@ -954,11 +985,46 @@ def from_dungeon_level(table):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_damage=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
+    chance = libtcod.random_get_int(0, 0, 100) # roll for quality
+    ranged_dmg = PISTOL_RANGED_DAMAGE
+    quality = ''
+    if chance < 10:
+        quality = 'Flawless'
+        ranged_dmg += '+2'
+    elif chance < 25 and chance >= 10:
+        quality = 'Superior'
+        ranged_dmg += '+1'
+    elif chance < 55 and chance >= 25:
+        quality = 'Standard'
+    elif chance < 75 and chance >= 55:
+        quality = 'Inferior'
+        ranged_dmg += '-1'
+    elif chance <= 100 and chance >= 75:
+        quality = 'Makeshift'
+        ranged_dmg += '-2'
+
+    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_damage=PISTOL_MELEE_DAMAGE, ranged_damage=ranged_dmg, accuracy_bonus=PISTOL_ACCURACY_BONUS, quality=quality)
 
 # Create and return a dagger component
 def create_dagger_equipment():
-    return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
+    chance = libtcod.random_get_int(0, 0, 100) # roll for quality
+    melee_dmg = DAGGER_DAMAGE
+    quality = ''
+    if chance < 10:
+        quality = 'Flawless'
+        melee_dmg += '+2'
+    elif chance < 25 and chance >= 10:
+        quality = 'Superior'
+        melee_dmg += '+1'
+    elif chance < 55 and chance >= 25:
+        quality = 'Standard'
+    elif chance < 75 and chance >= 55:
+        quality = 'Inferior'
+        melee_dmg += '-1'
+    elif chance <= 100 and chance >= 75:
+        quality = 'Makeshift'
+        melee_dmg += '-2'
+    return Equipment(slot='weapon', is_ranged=False, melee_damage=melee_dmg, accuracy_bonus=DAGGER_ACCURACY_BONUS, quality=quality)
 
 #############################
 ## Item Creation Functions ##
@@ -991,7 +1057,7 @@ def create_terminatron_fighter_component():
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
-    return Fighter(hp=15, armor=1, strength=3, accuracy=4, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
+    return Fighter(hp=15, armor=1, strength=3, accuracy=3, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
 
 # Create and return a cyborg fighter component
 def create_cyborg_fighter_component():
@@ -1038,7 +1104,7 @@ def cyborg_death(monster):
     pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and pistol_drop_chance < 25:
         equipment_component = create_pistol_equipment()
-        item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+        item = Object(x, y, '}', equipment_component.quality + ' Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
 
     # drop ammo on death
@@ -1066,6 +1132,34 @@ def cyborg_death(monster):
             totalMonstersLeft += 1
     if (totalMonstersLeft == 0):
         message('The halls become quiet...', libtcod.light_blue)
+
+#########################
+## Animation Functions ##
+#########################
+# plays standard explosion animation with x, y at the center
+# TODO: Finish explosion animation
+#def explosion_animation(dx, dy, r):
+#    print('In explosion animation...')
+#    for i in range(r):
+#        print('Setting char background...')
+#        libtcod.console_set_char_background(con, dx, dy, libtcod.red, libtcod.BKGND_SET)
+#        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+#
+#        if i != 0:
+#            libtcod.console_set_char_background(con, dx+i, dy, libtcod.red, libtcod.BKGND_SET)
+#            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+#
+#            libtcod.console_set_char_background(con, dx-i, dy, libtcod.red, libtcod.BKGND_SET)
+#            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+#
+#            libtcod.console_set_char_background(con, dx, dy+i, libtcod.red, libtcod.BKGND_SET)
+#            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+#
+#            libtcod.console_set_char_background(con, dx, dy-i, libtcod.red, libtcod.BKGND_SET)
+#            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+#
+#        libtcod.console_flush()
+#        sleep(1)
 
 # this is where we decide the chance of each monster or item appearing
 def place_objects(room):
@@ -1099,7 +1193,7 @@ def place_objects(room):
     # chance of each trap spawning
     trap_chances = {}
     trap_chances['none'] = from_dungeon_level([[95, 1]])
-    trap_chances['explosive_trap'] = from_dungeon_level([[555, 1]]) # TODO: DEBUGGING, CHANGE
+    trap_chances['explosive_trap'] = from_dungeon_level([[5, 1]]) # TODO: DEBUGGING, CHANGE
 
     # choose random number of traps
     num_traps = libtcod.random_get_int(0, 0, max_traps)
@@ -1179,11 +1273,11 @@ def place_objects(room):
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = create_dagger_equipment()
-                item = Object(x, y, '/', 'Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '/', equipment_component.quality + ' Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = create_pistol_equipment()
-                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '}', equipment_component.quality + ' Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
@@ -1221,7 +1315,7 @@ def get_names_under_mouse():
         if obj.x == x and obj.y == y and (libtcod.map_is_in_fov(fov_map, obj.x, obj.y) or (map[x][y].explored and obj.always_visible))]
 
     names = ', '.join(names) # join the names separated by commas
-    return names.capitalize()
+    return names
 
 # get equipment and ammo information from player
 def display_equipment_info():
@@ -1240,16 +1334,20 @@ def display_ammo_count():
 
 # display the chance to hit Fighter at Reticule
 def display_info_at_reticule():
+    string = ''
     if game_state == 'aiming': # if aiming
         enemy = get_fighter_by_tile(reticule.x, reticule.y)
         if enemy is not None and enemy is not player:
             chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
             string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
-            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, string)
     else: # if looking
-        obj = get_object_by_tile(reticule.x, reticule.y)
-        if obj is not None and obj is not reticule:
-            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, obj.name)
+        # create a list with the names of all objects at the reticule's coordinates and in FOV
+        string = [obj.name for obj in objects
+            if obj.x == reticule.x and obj.y == reticule.y and obj.name != 'Reticule' and ((libtcod.map_is_in_fov(fov_map, obj.x, obj.y) or (map[reticule.x][reticule.y].explored and obj.always_visible)))]
+
+        string = ', '.join(string) # join the names separated by commas
+    
+    return string
 
 # display the player's stats to hud screen
 def display_player_stats():
@@ -1363,7 +1461,9 @@ def render_all():
     # draw the reticule object last (over the player)
     if reticule is not None:
         if libtcod.map_is_in_fov(fov_map, reticule.x, reticule.y) or map[reticule.x][reticule.y].explored:
-            display_info_at_reticule()
+            # display names of objects under the mouse
+            libtcod.console_set_default_foreground(hud_panel, libtcod.light_grey) #changed to light_gray
+            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, display_info_at_reticule())
         reticule.draw()
         libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
         prev_x, prev_y = player.x, player.y
@@ -1919,6 +2019,7 @@ def trigger_explosive_trap(dx, dy):
 
     fighter = get_fighter_by_tile(dx, dy)
     if fighter is not None:
+        #explosion_animation(dx, dy, IMPACT_GRENADE_RADIUS)
         message('The tile underneath ' + fighter.name + ' explodes!', libtcod.orange)
         for obj in objects: # damage every fighter in range, including the player
             if obj.fighter and is_line_blocked_by_wall(fighter.x, fighter.y, dx, dy) is False and obj.distance(dx, dy) <= IMPACT_GRENADE_RADIUS:
@@ -2271,7 +2372,7 @@ def new_game():
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
     equipment_component = create_pistol_equipment()
-    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    obj = Object(0, 0, '}', equipment_component.quality + ' Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
 
