@@ -173,6 +173,7 @@ class Object:
         self.equipment = equipment
         if self.equipment: #let the Equipment component know who owns it
             self.equipment.owner = self
+            self.name = self.equipment.get_name()
 
             # there must be an Item component for the Equipment component to work properly
             self.item = Item()
@@ -619,10 +620,15 @@ class Item:
                 if self.shootable is False:
                     inventory.remove(self.owner) # destroy after use, unless it was cancelled for some reason
 
+    def scan(self):
+        if self.owner.equipment:
+            self.owner.equipment.scan()
+            return
+
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
     def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, max_ammo=0, ammo=0, melee_damage=None, ranged_damage=None, 
-        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0, quality=None):
+        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0, quality=None, is_identified=False):
         self.slot = slot
         self.melee_damage = melee_damage
         self.ranged_damage = ranged_damage
@@ -639,6 +645,13 @@ class Equipment:
         self.max_range = range
         self.shoot_function = shoot_function
         self.quality = quality
+        self.is_identified = is_identified
+
+    def get_name(self):
+        if self.is_identified is False:
+            return self.owner.name
+        elif self.is_identified is True:
+            return self.quality + ' ' + self.owner.name
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -669,6 +682,12 @@ class Equipment:
         else:
             if self.use_function() != 'cancelled':
                 return
+
+    def scan(self):
+        self.is_identified = True
+        self.owner.name = self.get_name()
+        print('In equipment scan! ' + self.owner.name + ' Id\'d?: ' + str(self.is_identified))
+        return
 
 # a trap that triggers when walked over
 class Trap:
@@ -1032,6 +1051,9 @@ def create_dagger_equipment():
 def create_health_pack_item_component():
     return Item(use_function=cast_heal)
 
+def create_scanner_item_component():
+    return Item(use_function=cast_scan_item, shootable=True)
+
 def create_lightning_device_item_component():
     return Item(use_function=cast_lightning)
 
@@ -1104,7 +1126,7 @@ def cyborg_death(monster):
     pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and pistol_drop_chance < 25:
         equipment_component = create_pistol_equipment()
-        item = Object(x, y, '}', equipment_component.quality + ' Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+        item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
 
     # drop ammo on death
@@ -1175,16 +1197,17 @@ def place_objects(room):
     monster_chances['terminatron'] = from_dungeon_level([[1, 1], [5, 3], [8, 5]])
 
     # maximum number of items per room
-    max_items = from_dungeon_level([[2, 1], [3, 3]])
+    max_items = from_dungeon_level([[3, 1], [3, 3]])
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['heal'] = from_dungeon_level([[40, 1]])
+    item_chances['heal'] = from_dungeon_level([[20, 1]])
+    item_chances['scanner'] = from_dungeon_level([[20, 1]]) # TODO: Fix these numbers
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
-    item_chances['pistol'] = from_dungeon_level([[10, 1]])
+    item_chances['pistol'] = from_dungeon_level([[15, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
 
     # maximum number of traps
@@ -1258,6 +1281,10 @@ def place_objects(room):
                 # create a health pack
                 item_component = create_health_pack_item_component()
                 item = Object(x, y, '+', 'Health Pack', libtcod.violet, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'scanner':
+                # create a scanner
+                item_component = create_scanner_item_component()
+                item = Object(x, y, '#', 'Scanner', libtcod.white, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'lightning':
                 # create a lightning device
                 item_component = create_lightning_device_item_component()
@@ -1273,11 +1300,11 @@ def place_objects(room):
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = create_dagger_equipment()
-                item = Object(x, y, '/', equipment_component.quality + ' Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '/', 'Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = create_pistol_equipment()
-                item = Object(x, y, '}', equipment_component.quality + ' Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
@@ -1351,6 +1378,9 @@ def display_info_at_reticule():
 
 # display the player's stats to hud screen
 def display_player_stats():
+    # get equipment to test for identified status
+    equipment = get_equipped_in_slot('weapon')
+
     # RUN_STATUS
     if player.fighter.run_status == 'rested':
         libtcod.console_set_default_foreground(hud_panel, libtcod.white)
@@ -1402,13 +1432,19 @@ def display_player_stats():
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, 'MELEE DMG: ')
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
-    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
+    if equipment.is_identified is True:
+        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
+    else:
+        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, '?')
 
     # RANGED DAMAGE
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, 'RANGE DMG: ')
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
-    libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.ranged_damage))
+    if equipment.is_identified is True:
+        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.ranged_damage))
+    else:
+        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, '?')
 
 # render game information to screen
 def render_all():
@@ -1736,6 +1772,29 @@ def inventory_menu(header):
     if index is None or len(inventory) == 0: return None
     return inventory[index].item
 
+# show a menu with items to scan
+def scan_menu(header):
+    scan_inventory = []
+    if inventory is not None and len(inventory) == 0:
+        options = ['Nothing to scan.']
+    else:
+        inventory.sort(key=lambda k: k.name, reverse=False)
+        options = []
+        for item in inventory:
+            if item.equipment and item.equipment.is_identified is False:
+                scan_inventory.append(item)
+                # if equipment, show ammo. if not, show item name
+                text = item.name + ' (' + str(item.equipment.ammo) + '/' + str(item.equipment.max_ammo) + ')' if (item.equipment and item.equipment.is_ranged) else item.name
+                if item.equipment and item.equipment.is_equipped:
+                    text = text + ' (on ' + item.equipment.slot + ')'
+                options.append(text)
+
+    index = menu(header, options, INVENTORY_WIDTH)
+
+    # if an item was chosen, return it
+    if index is None or len(scan_inventory) == 0: return None
+    return scan_inventory[index].item
+
 # finds closest enemy, up to a maximum range, and in the player's FOV
 def closest_monster(max_range):
     closest_enemy = None
@@ -1800,6 +1859,19 @@ def cast_heal():
 
     message('Your wounds start to feel better!', libtcod.light_violet)
     player.fighter.heal(HEAL_AMOUNT)
+
+# scan an item to reveal its properties
+# TODO: Finish scan item
+def cast_scan_item():
+    render_all()
+    chosen_item = scan_menu('Press the key next to an item to scan it, or any other to cancel.\n')
+    print('Chosen_item: ' + str(chosen_item.owner.name))
+    if chosen_item is not None:
+        player.fighter.has_moved_this_turn = False
+        chosen_item.scan()
+        scanner = next((i for i in inventory if i.name == 'Scanner'), None)
+        inventory.remove(scanner)
+        return 'turn-taken'
 
 # finds closest enemy (inside a maximum range) and damage it
 def cast_lightning():
@@ -2344,7 +2416,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=10000, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -2352,17 +2424,17 @@ def new_game():
     # initialize dungeon level
     dungeon_level = 1
 
-    #generate map (at this point it's not drawn to the screen)
-    make_map()
-
-    # initialize fov map
-    initialize_fov()
-
     # create the list of game messages and their colors, starts empty
     game_msgs = []
 
     # player inventory
     inventory = []
+
+    #generate map (at this point it's not drawn to the screen)
+    make_map()
+
+    # initialize fov map
+    initialize_fov()
 
     # change game state to playing
     game_state = 'playing'
@@ -2372,7 +2444,7 @@ def new_game():
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
     equipment_component = create_pistol_equipment()
-    obj = Object(0, 0, '}', equipment_component.quality + ' Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
 
