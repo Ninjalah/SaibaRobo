@@ -8,22 +8,11 @@ Cyberpunk Roguelike Action
   * **TODO**: Add a **chance** to bleed each time an injured Fighter moves.
   * **TODO**: Add a special message for if Player shoots and kills themselves
   * **TODO**: Leveling system currently broken due to Stat mismatch
-  * **TODO**: Separate Weapon and Armor from Equipment
-  * **TODO**: Add Fighter stats
-    * Semi finished, functionality not added everywhere
-  * **TODO**: Tweak all numbers, finish accuracy system (roll_to_hit)
+  * **TODO**: Separate Weapon and Armor from Equipment (still necessary?)
+  * **TODO**: If chance_to_hit check fails, fire the shot *near* the target.
 
-* **HUD**
-  * **TODO**: Add stats to Character stat screen
-
-* **Add keyboard-controls for aiming system**: Draw a green line (of -'s) to a cursor (denoted by a green x), fire at the tile under the cursor.  Start the cursor at the location of the nearest monster.
-  * Added for ranged weapons
-  * **TODO**: Add this functionality to devices as well (such as the Impact Grenade, which still currently uses mouse targeting)
+* **UI**
   * **TODO**: Fix AIM_RETICULE() so that if the reticule is placed on NEAREST_MONSTER, that same monster is chosen if AIM_RETICULE() is called again while another monster becomes the NEAREST_MONSTER (persistent targeting)
-
-* **Aiming System**
-
-* **Weapons**
 
 * **Add Weapons**
   * Energy Sword
@@ -31,15 +20,6 @@ Cyberpunk Roguelike Action
 
 * **Add the ability to throw items**
   * Add the chance for items to break when throwing them (hard items such as weapons only?)
-
-## Player
-### Stats
-* HP: Health points. Reach 0, you die.
-* STR: Strength. Adds damage to melee weapons.
-* ACC: Accuracy. Determines chance to hit.
-* FIN: Finesse. Adds damage to ranged weapons.
-* EVA: Evasion. Determines chance to dodge.
-* ARM: Armor. Reduces damage taken.
 
 ## Monsters
 Cyborg: Normal cybernetically enhanced human. Low health, low defense, low attack power. The most common monster type.
@@ -51,19 +31,15 @@ Terminatron: A large, hulking robot that mercilessly pursues interlopers. Massiv
 # Brainstorming
 
 ## General Notes
-* Change chances of Lightning Device spawning vs EMP. Currently, after level 4, chance of Lightning Device is higher than EMP. **COMPLETED**
-
-* Change chances of Terminatron spawning to be lower until level 5. **COMPLETED, chances altered**
-
-* Update inventory so that it appears ordered. **COMPLETED**
-
-* Change RNG rolls for monster/item generation to be based on 100 as a total. **COMPLETED, needs to be maintained per monster/item addition**
 
 ## Player
 ### Stats
-* DX/CN: (Dexterity/Cunning) Determines player ability to make saving throws in dire situations (such as, mecharachnid grapple).
-* IN/TC: (Intellect/Technical) Determines the success rate of certain technical rolls, such as success chance when jacking a fallen Cyborg's brain.
-* ACC: (Accuracy) Determines the player's ability to successfully hit their target.
+* HP: Health points. Reach 0, you die.
+* STR: Strength. Adds damage to melee weapons.
+* ACC: Accuracy. Determines chance to hit.
+* FIN: Finesse. Adds damage to ranged weapons.
+* EVA: Evasion. Determines chance to dodge.
+* ARM: Armor. Reduces damage taken.
 
 ### Weapons
 General section for weapons used by the player character (and some monsters).
@@ -78,6 +54,13 @@ General section for weapons used by the player character (and some monsters).
 General section for ammo and ammo types used by the player character.
 
 * **10mm ammo**: Ammo currently only used by the pistol. Dropped after single use.
+
+### Skills
+General section listing and describing skills that the player character can use.
+
+* **Run**: After hitting `Tab`, the Player enters a "Running" state. During this Running state, the Player has increased **EVA** but decreased **ACC**. After some turns, the Player enters a "Tired" state, which is functionally the same as "Rested", but does not allow Running until after using Health Pack.
+
+* **Movement**: For one turn after moving, the Player is considered "In motion". This adds a small EVA bonus to assist in escaping tight situations.
 
 ### Items
 General section for items used by the player character (and some monsters).
