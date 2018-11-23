@@ -143,7 +143,7 @@ class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
     # TODO: Remove max_capacity from game? Currently no purpose.
-    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, trap=None, z=0):
+    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, canister=None, trap=None, z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -169,6 +169,15 @@ class Object:
         self.trap = trap
         if self.trap: # let the Trap component know who owns it
             self.trap.owner = self
+
+        self.canister = canister
+        if self.canister: # let the Canister component know who owns it
+            self.canister.owner = self
+            self.name = self.canister.get_name()
+
+            # there must be an Item component for the Canister component to work properly
+            self.item = Item()
+            self.item.owner = self
 
         self.equipment = equipment
         if self.equipment: #let the Equipment component know who owns it
@@ -568,6 +577,7 @@ class Item:
         self.shootable = shootable
 
     def pick_up(self):
+        print('In pick_up()...')
         # add to the player's inventory and remove from map
         if self.owner.capacity is not None: # if ammo, add to player's ammo TODO: Generalize this function
             if "10mm" in self.owner.name: # if the item we're picking up is 10mm ammo
@@ -612,6 +622,11 @@ class Item:
             self.owner.equipment.toggle_equip()
             return
 
+        # special case: if the object has the Canister component, the "use" action is to quaff
+        if self.owner.canister:
+            self.owner.canister.quaff()
+            return
+
         # just call the "use_function" if it is defined
         if self.use_function is None:
             message('The ' + self.owner.name + ' cannot be used.')
@@ -624,6 +639,34 @@ class Item:
         if self.owner.equipment:
             self.owner.equipment.scan()
             return
+        
+        if self.owner.canister:
+            self.owner.canister.scan()
+            return
+
+# a canister that can be drank (or thrown) for various effects
+class Canister:
+    def __init__(self, canister_function=None, is_identified=False):
+        self.canister_function = canister_function
+        self.is_identified = is_identified
+
+    def get_name(self):
+        if self.is_identified is False:
+            return self.owner.name
+        elif self.is_identified is True:
+            return 'Real Canister Name' # TODO: Fix this, spoof data
+
+    def quaff(self):
+        self.canister_function()
+        # TODO: Remove the canister from Player's inventory
+        inventory.remove(self.owner)
+        return
+
+    def scan(self):
+        self.is_identified = True
+        self.owner.name = self.get_name()
+        print('In canister scan! ' + self.owner.name + ' Id\'d?: ' + str(self.is_identified))
+        return
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
@@ -1063,6 +1106,12 @@ def create_emp_device_item_component():
 def create_impact_grenade_item_component():
     return Item(use_function=cast_aim_impact_grenade, shootable=True)
 
+#################################
+## Canister Creation Functions ##
+#################################
+def create_health_canister_component():
+    return Canister(canister_function=cast_heal, is_identified=False)
+
 #############################
 ## Trap Creation Functions ##
 #############################
@@ -1202,13 +1251,14 @@ def place_objects(room):
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
     item_chances['heal'] = from_dungeon_level([[20, 1]])
-    item_chances['scanner'] = from_dungeon_level([[20, 1]]) # TODO: Fix these numbers
+    item_chances['scanner'] = from_dungeon_level([[500, 1]])
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[15, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
+    item_chances['heal_canister'] = from_dungeon_level([[999, 1]]) # TODO: Fix these numbers
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1309,6 +1359,10 @@ def place_objects(room):
                 # create a 10mm_ammo
                 item_component = Item()
                 item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'heal_canister':
+                # create a health canister
+                canister_component = create_health_canister_component()
+                item = Object(x, y, '!', 'Blue Canister', libtcod.blue, canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
 
             objects.append(item)
             # item.send_to_back() # items appear below other objects
@@ -1787,6 +1841,10 @@ def scan_menu(header):
                 text = item.name + ' (' + str(item.equipment.ammo) + '/' + str(item.equipment.max_ammo) + ')' if (item.equipment and item.equipment.is_ranged) else item.name
                 if item.equipment and item.equipment.is_equipped:
                     text = text + ' (on ' + item.equipment.slot + ')'
+                options.append(text)
+            elif item.canister and item.canister.is_identified is False:
+                scan_inventory.append(item)
+                text = item.name
                 options.append(text)
 
     index = menu(header, options, INVENTORY_WIDTH)
@@ -2416,7 +2474,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=10000, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
