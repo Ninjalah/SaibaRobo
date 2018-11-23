@@ -1197,7 +1197,7 @@ def place_objects(room):
     monster_chances['terminatron'] = from_dungeon_level([[1, 1], [5, 3], [8, 5]])
 
     # maximum number of items per room
-    max_items = from_dungeon_level([[3, 1], [3, 3]])
+    max_items = from_dungeon_level([[2, 1], [3, 3]])
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
