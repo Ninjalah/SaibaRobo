@@ -671,6 +671,8 @@ class Canister:
 
     def quaff(self):
         self.canister_function()
+        if self.is_identified is False:
+            self.scan()
         inventory.remove(self.owner)
         return
 
@@ -1129,9 +1131,6 @@ def create_dagger_equipment():
 #############################
 ## Item Creation Functions ##
 #############################
-def create_health_pack_item_component():
-    return Item(use_function=cast_heal)
-
 def create_scanner_item_component():
     return Item(use_function=cast_scan_item, shootable=True)
 
@@ -1218,7 +1217,7 @@ def cyborg_death(monster):
     # drop pistol on death
     (x, y) = get_unblocked_tile_around(monster.x, monster.y)
     pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
-    if x is not None and pistol_drop_chance < 25:
+    if x is not None and pistol_drop_chance < 5:
         equipment_component = create_pistol_equipment()
         item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
@@ -1295,16 +1294,15 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['heal'] = from_dungeon_level([[20, 1]])
-    item_chances['scanner'] = from_dungeon_level([[500, 1]])
+    item_chances['scanner'] = from_dungeon_level([[20, 1]])
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
-    item_chances['pistol'] = from_dungeon_level([[15, 1]])
-    item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
-    item_chances['heal_canister'] = from_dungeon_level([[999, 1]]) # TODO: Fix these numbers
-    item_chances['strength_canister'] = from_dungeon_level([[999, 1]])
+    item_chances['pistol'] = from_dungeon_level([[5, 1]])
+    item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
+    item_chances['heal_canister'] = from_dungeon_level([[20, 1]]) # TODO: Fix these numbers
+    item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1373,11 +1371,7 @@ def place_objects(room):
         # only place it if the tile is NOT BLOCKED
         if not is_blocked(x, y):
             choice = random_choice(item_chances)
-            if choice == 'heal':
-                # create a health pack
-                item_component = create_health_pack_item_component()
-                item = Object(x, y, '+', 'Health Pack', libtcod.violet, item=item_component, always_visible=True, z=ITEM_Z_VAL)
-            elif choice == 'scanner':
+            if choice == 'scanner':
                 # create a scanner
                 item_component = create_scanner_item_component()
                 item = Object(x, y, '#', 'Scanner', libtcod.white, item=item_component, always_visible=True, z=ITEM_Z_VAL)
@@ -2528,7 +2522,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=10000, xp=0, accuracy=10, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
