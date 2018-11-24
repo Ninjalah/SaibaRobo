@@ -2,6 +2,7 @@ import libtcodpy as libtcod
 import math
 import textwrap
 import shelve
+import random
 from time import sleep
  
 #actual size of the window
@@ -58,6 +59,18 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 5
 IMPACT_GRENADE_DAMAGE = '4d6+10'
+
+############################
+## Canister Color Globals ##
+############################
+HEAL_CANISTER_COLOR = ''
+STRENGTH_CANISTER_COLOR = ''
+
+##############################
+## Canister Is_Id'd Globals ##
+##############################
+IS_HEAL_CANISTER_IDENTIFIED = False
+IS_STRENGTH_CANISTER_IDENTIFIED = False
 
 #########################
 ## Fixed Weapon Values ##
@@ -646,26 +659,33 @@ class Item:
 
 # a canister that can be drank (or thrown) for various effects
 class Canister:
-    def __init__(self, canister_function=None, is_identified=False):
+    def __init__(self, color, canister_function=None, is_identified=False):
+        self.color = color
         self.canister_function = canister_function
         self.is_identified = is_identified
 
     def get_name(self):
         if self.is_identified is False:
-            return self.owner.name
+            return self.color + ' Canister'
         elif self.is_identified is True:
-            return 'Real Canister Name' # TODO: Fix this, spoof data
+            return get_canister_name_from_function(self.canister_function)
 
     def quaff(self):
         self.canister_function()
-        # TODO: Remove the canister from Player's inventory
         inventory.remove(self.owner)
         return
 
     def scan(self):
         self.is_identified = True
         self.owner.name = self.get_name()
-        print('In canister scan! ' + self.owner.name + ' Id\'d?: ' + str(self.is_identified))
+        for c in objects:
+            if c.canister and c.canister.color == self.color:
+                c.canister.is_identified = True
+                c.name = c.canister.get_name()
+        for c in inventory:
+            if c.canister and c.canister.color == self.color:
+                c.canister.is_identified = True
+                c.name = c.canister.get_name()
         return
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
@@ -1041,6 +1061,24 @@ def from_dungeon_level(table):
             return value
     return 0
 
+# returns a libtcod color value based on a string param
+# TODO: Add all other colors
+def get_libtcod_color_from_string(color):
+    if color == 'Blue':
+        return libtcod.blue
+    elif color == 'Red':
+        return libtcod.red
+    return libtcod.grey
+
+# returns a canister name string from the canister use function
+def get_canister_name_from_function(function):
+    if function == cast_heal:
+        return 'Heal Canister'
+    elif function == cast_increase_strength:
+        return 'Strength Canister'
+    else:
+        return 'ADD CANISTER NAME'
+
 ##################################
 ## Equipment Creation Functions ##
 ##################################
@@ -1109,12 +1147,19 @@ def create_impact_grenade_item_component():
 #################################
 ## Canister Creation Functions ##
 #################################
+# Create and return a health canister component
 def create_health_canister_component():
-    return Canister(canister_function=cast_heal, is_identified=False)
+    print('HEAL_CANISTER_COLOR: ' + HEAL_CANISTER_COLOR)
+    return Canister(color=HEAL_CANISTER_COLOR, canister_function=cast_heal, is_identified=IS_HEAL_CANISTER_IDENTIFIED)
+
+def create_strength_canister_component():
+    print('STRENGTH_CANISTER_COLOR: ' + STRENGTH_CANISTER_COLOR)
+    return Canister(color=STRENGTH_CANISTER_COLOR, canister_function=cast_increase_strength, is_identified=IS_STRENGTH_CANISTER_IDENTIFIED)
 
 #############################
 ## Trap Creation Functions ##
 #############################
+# Create and return an explosive trap component
 def create_explosive_trap_component():
     return Trap(is_triggered=False, trigger_function=trigger_explosive_trap)
 
@@ -1259,6 +1304,7 @@ def place_objects(room):
     item_chances['pistol'] = from_dungeon_level([[15, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[15, 1]])
     item_chances['heal_canister'] = from_dungeon_level([[999, 1]]) # TODO: Fix these numbers
+    item_chances['strength_canister'] = from_dungeon_level([[999, 1]])
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1358,11 +1404,15 @@ def place_objects(room):
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
-                item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '\'', '10mm Ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'heal_canister':
                 # create a health canister
                 canister_component = create_health_canister_component()
-                item = Object(x, y, '!', 'Blue Canister', libtcod.blue, canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'strength_canister':
+                # create a strength canister
+                canister_component = create_strength_canister_component()
+                item = Object(x, y, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
 
             objects.append(item)
             # item.send_to_back() # items appear below other objects
@@ -1918,6 +1968,10 @@ def cast_heal():
     message('Your wounds start to feel better!', libtcod.light_violet)
     player.fighter.heal(HEAL_AMOUNT)
 
+def cast_increase_strength():
+    message('You feel stronger.', libtcod.light_violet)
+    player.fighter.strength += 1
+
 # scan an item to reveal its properties
 # TODO: Finish scan item
 def cast_scan_item():
@@ -2464,6 +2518,7 @@ def load_game():
 # START A NEW GAME
 def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
+    global HEAL_CANISTER_COLOR, STRENGTH_CANISTER_COLOR
 
     #create empty reticule object
     reticule = None
@@ -2474,7 +2529,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=10000, xp=0, accuracy=10, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -2487,6 +2542,13 @@ def new_game():
 
     # player inventory
     inventory = []
+
+    # TODO: FINISH THIS
+    # assign canister colors to canister types
+    colors = ['Blue', 'Red']
+    random.shuffle(colors)
+    HEAL_CANISTER_COLOR = colors.pop()
+    STRENGTH_CANISTER_COLOR = colors.pop()
 
     #generate map (at this point it's not drawn to the screen)
     make_map()
