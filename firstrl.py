@@ -539,7 +539,6 @@ class CyborgAI:
                                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                                     libtcod.console_flush()
                                     sleep(PROJECTILE_SLEEP_TIME)
-                                    hit_obj = get_fighter_by_tile(x, y)
                                     hasHit = True
                                     message('The ' + monster.name + '\'s shot misses!', libtcod.red)
                                     break
@@ -799,9 +798,10 @@ def get_unblocked_tile_around(x, y):
             return (dx + x, dy + y)
 
 # returns an object by tile
+# NOTE: Excludes corpses!
 def get_object_by_tile(x, y):
     for obj in objects:
-        if (obj.x, obj.y) == (x, y):
+        if (obj.x, obj.y) == (x, y) and 'remains' not in obj.name:
             return obj
     return None
  
@@ -2128,7 +2128,6 @@ def cast_shoot_pistol(dx, dy, weapon):
                         libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                         libtcod.console_flush()
                         sleep(PROJECTILE_SLEEP_TIME)
-                        hit_obj = get_fighter_by_tile(x, y)
                         hasHit = True
                         message('The shot misses any meaningful target.', libtcod.red)
                         break
