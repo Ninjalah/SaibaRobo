@@ -63,13 +63,13 @@ IMPACT_GRENADE_DAMAGE = '4d6+10'
 ############################
 ## Canister Color Globals ##
 ############################
-HEAL_CANISTER_COLOR = ''
+HEALTH_CANISTER_COLOR = ''
 STRENGTH_CANISTER_COLOR = ''
 
 ##############################
 ## Canister Is_Id'd Globals ##
 ##############################
-IS_HEAL_CANISTER_IDENTIFIED = False
+IS_HEALTH_CANISTER_IDENTIFIED = False
 IS_STRENGTH_CANISTER_IDENTIFIED = False
 
 #########################
@@ -1075,7 +1075,7 @@ def get_libtcod_color_from_string(color):
 # returns a canister name string from the canister use function
 def get_canister_name_from_function(function):
     if function == cast_heal:
-        return 'Heal Canister'
+        return 'Health Canister'
     elif function == cast_increase_strength:
         return 'Strength Canister'
     else:
@@ -1148,8 +1148,8 @@ def create_impact_grenade_item_component():
 #################################
 # Create and return a health canister component
 def create_health_canister_component():
-    print('HEAL_CANISTER_COLOR: ' + HEAL_CANISTER_COLOR)
-    return Canister(color=HEAL_CANISTER_COLOR, canister_function=cast_heal, is_identified=IS_HEAL_CANISTER_IDENTIFIED)
+    print('HEALTH_CANISTER_COLOR: ' + HEALTH_CANISTER_COLOR)
+    return Canister(color=HEALTH_CANISTER_COLOR, canister_function=cast_heal, is_identified=IS_HEALTH_CANISTER_IDENTIFIED)
 
 def create_strength_canister_component():
     print('STRENGTH_CANISTER_COLOR: ' + STRENGTH_CANISTER_COLOR)
@@ -1301,7 +1301,7 @@ def place_objects(room):
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[5, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['heal_canister'] = from_dungeon_level([[20, 1]]) # TODO: Fix these numbers
+    item_chances['health_canister'] = from_dungeon_level([[20, 1]]) # TODO: Fix these numbers
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
 
     # maximum number of traps
@@ -1399,7 +1399,7 @@ def place_objects(room):
                 # create a 10mm_ammo
                 item_component = Item()
                 item = Object(x, y, '\'', '10mm Ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
-            elif choice == 'heal_canister':
+            elif choice == 'health_canister':
                 # create a health canister
                 canister_component = create_health_canister_component()
                 item = Object(x, y, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
@@ -2128,8 +2128,9 @@ def cast_shoot_pistol(dx, dy, weapon):
                     else:
                         libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
                         # redraws objs if a bullet is shot over them
-                        if obj is not None:
-                            obj.draw()
+                        #if obj is not None:
+                        #    obj.draw()
+                        render_all()
                         prev_x, prev_y = x, y
                         x, y = libtcod.line_step()
                 if (x is not None): # delete bullet char from spot hit
@@ -2511,7 +2512,7 @@ def load_game():
 # START A NEW GAME
 def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
-    global HEAL_CANISTER_COLOR, STRENGTH_CANISTER_COLOR
+    global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR
 
     #create empty reticule object
     reticule = None
@@ -2540,7 +2541,7 @@ def new_game():
     # assign canister colors to canister types
     colors = ['Blue', 'Red']
     random.shuffle(colors)
-    HEAL_CANISTER_COLOR = colors.pop()
+    HEALTH_CANISTER_COLOR = colors.pop()
     STRENGTH_CANISTER_COLOR = colors.pop()
 
     #generate map (at this point it's not drawn to the screen)
