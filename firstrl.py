@@ -106,7 +106,7 @@ CYBORG_RANGED_DAMAGE = '2d4'
 
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
-TORCH_RADIUS = 10
+TORCH_RADIUS = 20
  
 LIMIT_FPS = 60  #60 frames-per-second maximum
  
@@ -114,11 +114,11 @@ LIMIT_FPS = 60  #60 frames-per-second maximum
 ## Lighting Colors ##
 #####################
 # color_dark_wall = libtcod.Color(0, 0, 100)
-color_dark_wall = libtcod.darkest_han
+color_dark_wall = libtcod.darkest_violet
 # color_light_wall = libtcod.Color(130, 110, 50)
 color_light_wall = libtcod.darkest_yellow
 #color_dark_ground = libtcod.Color(50, 50, 150)
-color_dark_ground = libtcod.darker_han
+color_dark_ground = libtcod.darker_violet
 #color_light_ground = libtcod.Color(200, 180, 50)
 color_light_ground = libtcod.darker_yellow
 
