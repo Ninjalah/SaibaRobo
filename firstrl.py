@@ -106,7 +106,7 @@ CYBORG_RANGED_DAMAGE = '2d4'
 
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
-TORCH_RADIUS = 20
+TORCH_RADIUS = 14
  
 LIMIT_FPS = 60  #60 frames-per-second maximum
  
