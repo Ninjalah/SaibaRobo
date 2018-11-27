@@ -110,14 +110,24 @@ TORCH_RADIUS = 10
  
 LIMIT_FPS = 60  #60 frames-per-second maximum
  
+#####################
+## Lighting Colors ##
+#####################
 # color_dark_wall = libtcod.Color(0, 0, 100)
 color_dark_wall = libtcod.darkest_han
 # color_light_wall = libtcod.Color(130, 110, 50)
-color_light_wall = libtcod.darker_violet
+color_light_wall = libtcod.darkest_yellow
 #color_dark_ground = libtcod.Color(50, 50, 150)
 color_dark_ground = libtcod.darker_han
 #color_light_ground = libtcod.Color(200, 180, 50)
-color_light_ground = libtcod.dark_violet
+color_light_ground = libtcod.darker_yellow
+
+#################
+## Shot Colors ##
+#################
+SHOT_CRIT_HIGH = libtcod.sky
+SHOT_CRIT_LOW = libtcod.red
+SHOT_NORMAL = libtcod.white
 
 fov_recompute = True
 game_state = 'playing'
@@ -500,11 +510,11 @@ class CyborgAI:
                             while (x is not None):
                                 (min, max) = get_min_max_dmg(monster.fighter.ranged_damage)
                                 if (totalDamage == max):
-                                    libtcod.console_set_default_foreground(con, libtcod.sky)
+                                    libtcod.console_set_default_foreground(con, SHOT_CRIT_HIGH)
                                 elif (totalDamage == min):
-                                    libtcod.console_set_default_foreground(con, libtcod.red)
+                                    libtcod.console_set_default_foreground(con, SHOT_CRIT_LOW)
                                 else:
-                                    libtcod.console_set_default_foreground(con, libtcod.white)
+                                    libtcod.console_set_default_foreground(con, SHOT_NORMAL)
                                 #if libtcod.map_is_in_fov(fov_map, x, y):
                                 normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
                                 if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
@@ -2093,11 +2103,11 @@ def cast_shoot_pistol(dx, dy, weapon):
                 while (x is not None):
                     (min, max) = get_min_max_dmg(player.fighter.ranged_damage)
                     if (totalDamage == max):
-                        libtcod.console_set_default_foreground(con, libtcod.sky)
+                        libtcod.console_set_default_foreground(con, SHOT_CRIT_HIGH)
                     elif (totalDamage == min):
-                        libtcod.console_set_default_foreground(con, libtcod.red)
+                        libtcod.console_set_default_foreground(con, SHOT_CRIT_LOW)
                     else:
-                        libtcod.console_set_default_foreground(con, libtcod.white)
+                        libtcod.console_set_default_foreground(con, SHOT_NORMAL)
                     #if libtcod.map_is_in_fov(fov_map, x, y):
                     normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
                     if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
