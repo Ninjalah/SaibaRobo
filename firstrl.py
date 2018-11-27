@@ -110,10 +110,14 @@ TORCH_RADIUS = 10
  
 LIMIT_FPS = 60  #60 frames-per-second maximum
  
-color_dark_wall = libtcod.Color(0, 0, 100)
-color_light_wall = libtcod.Color(130, 110, 50)
-color_dark_ground = libtcod.Color(50, 50, 150)
-color_light_ground = libtcod.Color(200, 180, 50)
+# color_dark_wall = libtcod.Color(0, 0, 100)
+color_dark_wall = libtcod.darkest_han
+# color_light_wall = libtcod.Color(130, 110, 50)
+color_light_wall = libtcod.darker_violet
+#color_dark_ground = libtcod.Color(50, 50, 150)
+color_dark_ground = libtcod.darker_han
+#color_light_ground = libtcod.Color(200, 180, 50)
+color_light_ground = libtcod.dark_violet
 
 fov_recompute = True
 game_state = 'playing'
@@ -545,8 +549,9 @@ class CyborgAI:
                                 else:
                                     libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
                                     # redraws objs if a bullet is shot over them
-                                    if obj is not None:
-                                        obj.draw()
+                                    #if obj is not None:
+                                    #    obj.draw()
+                                    render_all()
                                     prev_x, prev_y = x, y
                                     x, y = libtcod.line_step()
                             if (x is not None): # delete bullet char from spot hit
@@ -827,7 +832,7 @@ def point_to_point_vector(start_x, start_y, end_x, end_y):
 
 # get the distance between two points
 def get_dist_between_points(x1, y1, x2, y2):
-    return math.hypot(x2 - x1, y2 - x1)
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 def create_room(room):
     global map
@@ -1348,15 +1353,15 @@ def place_objects(room):
             if choice == 'terminatron':
                 fighter_component = create_terminatron_fighter_component()
                 ai_component = MeleeAI()
-                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, always_visible=True, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
                 fighter_component = create_mecharachnid_fighter_component()
                 ai_component = MeleeAI()
-                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, always_visible=True, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
                 fighter_component = create_cyborg_fighter_component()
                 ai_component = CyborgAI()
-                monster = Object(x, y, 'c', 'Cyborg', libtcod.darker_gray, always_visible=True, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'c', 'Cyborg', libtcod.lightest_gray, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
             objects.append(monster)
 
@@ -1563,6 +1568,13 @@ def render_all():
         fov_recompute = False
         libtcod.map_compute_fov(fov_map, player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO)
  
+        # TODO: Finish dynamic lighting
+        idx = [0, 3, TORCH_RADIUS]
+        ground_col = [color_light_ground, color_light_ground, color_dark_ground]
+        wall_col = [color_light_wall, color_light_wall, color_dark_wall]
+        ground_light_map = libtcod.color_gen_map(ground_col, idx)
+        wall_light_map = libtcod.color_gen_map(wall_col, idx)
+
         #go through all tiles, and set their background color according to the FOV
         for y in range(MAP_HEIGHT):
             for x in range(MAP_WIDTH):
@@ -1579,10 +1591,13 @@ def render_all():
                 else:
                     #it's visible
                     # TODO: scale lighting based on distance
+                    dist = get_dist_between_points(player.x, player.y, x, y)
                     if wall:
-                        libtcod.console_set_char_background(con, x, y, color_light_wall, libtcod.BKGND_SET)
+                        if dist <= TORCH_RADIUS:
+                            libtcod.console_set_char_background(con, x, y, wall_light_map[int(dist)], libtcod.BKGND_SET)
                     else:
-                        libtcod.console_set_char_background(con, x, y, color_light_ground, libtcod.BKGND_SET)
+                        if dist <= TORCH_RADIUS:
+                            libtcod.console_set_char_background(con, x, y, ground_light_map[int(dist)], libtcod.BKGND_SET)
                     # since it's visible, it's explored
                     map[x][y].explored = True
  
@@ -1971,7 +1986,6 @@ def cast_increase_strength():
 def cast_scan_item():
     render_all()
     chosen_item = scan_menu('Press the key next to an item to scan it, or any other to cancel.\n')
-    print('Chosen_item: ' + str(chosen_item.owner.name))
     if chosen_item is not None:
         player.fighter.has_moved_this_turn = False
         chosen_item.scan()
