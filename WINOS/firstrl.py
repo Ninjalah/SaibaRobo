@@ -94,7 +94,6 @@ DAGGER_ACCURACY_BONUS = 3
 
 ##########################
 ## Fixed Monster Values ##
-#TODO: Finish porting over these fixed values
 # TERMINATRON
 TERMINATRON_MELEE_DAMAGE = '2d6'
 
@@ -114,13 +113,28 @@ LIMIT_FPS = 60  #60 frames-per-second maximum
 ## Lighting Colors ##
 #####################
 # color_dark_wall = libtcod.Color(0, 0, 100)
-color_dark_wall = libtcod.darkest_violet
+color_dark_wall = libtcod.darkest_han
 # color_light_wall = libtcod.Color(130, 110, 50)
-color_light_wall = libtcod.darkest_yellow
+color_light_wall = libtcod.dark_sepia
 #color_dark_ground = libtcod.Color(50, 50, 150)
-color_dark_ground = libtcod.darker_violet
+color_dark_ground = libtcod.darker_han
 #color_light_ground = libtcod.Color(200, 180, 50)
-color_light_ground = libtcod.darker_yellow
+color_light_ground = libtcod.sepia
+
+###################
+## Object Colors ##
+###################
+## Fighters ##
+PLAYER_COLOR = libtcod.white
+CYBORG_COLOR = libtcod.white
+MECHARACHNID_COLOR = libtcod.white
+TERMINATRON_COLOR = libtcod.dark_red
+
+## Items ##
+STAIRS_COLOR = libtcod.white
+PISTOL_COLOR = libtcod.white
+DAGGER_COLOR = libtcod.white
+TENMM_AMMO_COLOR = libtcod.white
 
 #################
 ## Shot Colors ##
@@ -355,16 +369,16 @@ class Fighter:
             weapon = get_equipped_in_slot('weapon')
             if weapon is not None: # and if holding a weapon
                 if (self.strength != 0):
-                    return str(weapon.melee_damage) + '+' + str(self.strength)
+                    return get_combined_damage(weapon.melee_damage, self.strength)
                 else:
                     return str(weapon.melee_damage)
             else: # or if melee_damage is none (not holding weapon)
                 if (self.strength != 0):
-                    return UNARMED_DAMAGE + '+' + str(self.strength)
+                    return get_combined_damage(UNARMED_DAMAGE, self.strength)
                 else:
                     return UNARMED_DAMAGE
         else: # if Fighter is NOT player
-            return str(self.base_melee_damage) + '+' + str(self.strength)
+            return get_combined_damage(self.base_melee_damage, self.strength)
 
     @property
     def ranged_damage(self):
@@ -372,13 +386,13 @@ class Fighter:
             weapon = get_equipped_in_slot('weapon')
             if weapon is not None and weapon.ranged_damage is not None: # and if holding a weapon
                 if (self.finesse != 0):
-                    return str(weapon.ranged_damage) + '+' + str(self.finesse)
+                    return get_combined_damage(weapon.ranged_damage, self.finesse)
                 else:
                     return str(weapon.ranged_damage)
             else: # or if ranged_damage is none (not holding weapon)
                 return None
         else: # if Fighter is NOT player
-            return str(self.base_ranged_damage) + '+' + str(self.finesse)
+            return get_combined_damage(self.base_ranged_damage, self.finesse)
 
     @property
     def strength(self):
@@ -936,7 +950,7 @@ def make_map():
             num_rooms += 1
 
     # create stairs at the center of the last room
-    stairs = Object(new_x, new_y, '>', 'stairs', libtcod.white, always_visible=True, z=STAIRS_Z_VAL)
+    stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
     objects.append(stairs)
     # stairs.send_to_back() #so it's drawn below the monsters
 
@@ -1071,6 +1085,30 @@ def roll_to_hit(accuracy_bonus=0, evasion_penalty=0):
     else:
         return False
 
+# function to combine multiple dice modifiers
+# Example: 2d4+2-1 -> 2d4+1
+# NOTE: dmg_str = 2d4+2 | bonus = 1
+def get_combined_damage(dmg_str, bonus):
+    if '+' in dmg_str: # if dmg_str has '+' mod
+        d = dmg_str.split('+')
+        b = int(d[1])
+        b += bonus
+        p = '+'
+    elif '-' in dmg_str: # if dmg_str has '-' mod
+        d = dmg_str.split('-')
+        b = 0 - int(d[1])
+        b += bonus
+        p = '-'
+    else: # if dmg_str has no mod
+        if bonus > 0:
+            return dmg_str + '+' + str(bonus)
+        elif bonus < 0:
+            return dmg_str + '-' + str(bonus)
+        else:
+            return dmg_str
+    
+    return d[0] + p + str(b)
+
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
 def from_dungeon_level(table):
     for (value, level) in reversed(table):
@@ -1082,7 +1120,7 @@ def from_dungeon_level(table):
 # TODO: Add all other colors
 def get_libtcod_color_from_string(color):
     if color == 'Blue':
-        return libtcod.blue
+        return libtcod.sky
     elif color == 'Red':
         return libtcod.red
     return libtcod.grey
@@ -1199,14 +1237,19 @@ def create_cyborg_fighter_component():
 
 # ends game is player dies!
 def player_death(player):
-    global game_state
+    global game_state, color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
     message('You died!', libtcod.red)
     game_state = 'dead'
+    color_dark_wall = libtcod.darkest_grey
+    color_dark_ground = libtcod.darker_grey
+    color_light_wall = libtcod.darkest_red
+    color_light_ground = libtcod.darker_red
 
     # for added effect, transform the player into a corpse!
     player.char = '%'
     player.color = libtcod.dark_red
-
+    initialize_fov()
+    
 # transform into a nasty corpse! it doesn't block, can't be attacked, and doesn't move
 # NOTE: Generic monster death function
 def basic_monster_death(monster):
@@ -1234,7 +1277,7 @@ def cyborg_death(monster):
     pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and pistol_drop_chance < 5:
         equipment_component = create_pistol_equipment()
-        item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+        item = Object(x, y, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
 
     # drop ammo on death
@@ -1242,7 +1285,7 @@ def cyborg_death(monster):
     ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and ammo_drop_chance < 75:
         item_component = Item()
-        item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
+        item = Object(x, y, '\'', '10mm ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
         objects.append(item)
         item.send_to_back()
 
@@ -1363,15 +1406,15 @@ def place_objects(room):
             if choice == 'terminatron':
                 fighter_component = create_terminatron_fighter_component()
                 ai_component = MeleeAI()
-                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'T', 'Terminatron', TERMINATRON_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
                 fighter_component = create_mecharachnid_fighter_component()
                 ai_component = MeleeAI()
-                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'm', 'Mecharachnid', MECHARACHNID_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
                 fighter_component = create_cyborg_fighter_component()
                 ai_component = CyborgAI()
-                monster = Object(x, y, 'c', 'Cyborg', libtcod.lightest_gray, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'c', 'Cyborg', CYBORG_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
             objects.append(monster)
 
@@ -1405,15 +1448,15 @@ def place_objects(room):
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = create_dagger_equipment()
-                item = Object(x, y, '/', 'Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = create_pistol_equipment()
-                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
-                item = Object(x, y, '\'', '10mm Ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '\'', '10mm Ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'health_canister':
                 # create a health canister
                 canister_component = create_health_canister_component()
@@ -1479,7 +1522,7 @@ def display_info_at_reticule():
         enemy = get_fighter_by_tile(reticule.x, reticule.y)
         if enemy is not None and enemy is not player:
             chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
-            string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
+            string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%'
     else: # if looking
         # create a list with the names of all objects at the reticule's coordinates and in FOV
         string = [obj.name for obj in objects
@@ -1545,16 +1588,19 @@ def display_player_stats():
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, 'MELEE DMG: ')
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
-    if equipment.is_identified is True:
+    if equipment is None:
         libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
     else:
-        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, '?')
+        if equipment.is_identified is True:
+            libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
+        else:
+            libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, '?')
 
     # RANGED DAMAGE
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, 'RANGE DMG: ')
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
-    if equipment.is_identified is True:
+    if equipment is not None and equipment.is_identified is True:
         libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.ranged_damage))
     else:
         libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, '?')
@@ -2537,6 +2583,12 @@ def load_game():
 def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
     global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR
+    global color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
+
+    color_dark_wall = libtcod.darkest_han
+    color_light_wall = libtcod.dark_sepia
+    color_dark_ground = libtcod.darker_han
+    color_light_ground = libtcod.sepia
 
     #create empty reticule object
     reticule = None
@@ -2548,7 +2600,7 @@ def new_game():
     
     #create object representing the player
     fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
-    player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
+    player = Object(0, 0, '@', 'Player', PLAYER_COLOR, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
     
@@ -2582,9 +2634,18 @@ def new_game():
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
     equipment_component = create_pistol_equipment()
-    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    inventory.append(obj)
+
+    equipment_component = create_dagger_equipment()
+    equipment_component.is_identified = True
+    obj = Object(0, 0, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
+
+    canister_component = create_strength_canister_component()
+    obj = Object(0, 0, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+    inventory.append(obj)
 
     # TODO: REMOVE THIS, TESTING
     #item_component = create_impact_grenade_item_component()
@@ -2691,8 +2752,8 @@ def main_menu():
         elif choice == 2: # quit
             break
 
-libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-#libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+#libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
