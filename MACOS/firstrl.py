@@ -4,9 +4,6 @@ import textwrap
 import shelve
 import random
 from time import sleep
-
-# TODO: Remove
-# This is a test!
  
 #actual size of the window
 SCREEN_WIDTH = 113
@@ -97,7 +94,6 @@ DAGGER_ACCURACY_BONUS = 3
 
 ##########################
 ## Fixed Monster Values ##
-#TODO: Finish porting over these fixed values
 # TERMINATRON
 TERMINATRON_MELEE_DAMAGE = '2d6'
 
@@ -117,13 +113,28 @@ LIMIT_FPS = 60  #60 frames-per-second maximum
 ## Lighting Colors ##
 #####################
 # color_dark_wall = libtcod.Color(0, 0, 100)
-color_dark_wall = libtcod.darkest_violet
+color_dark_wall = libtcod.darkest_han
 # color_light_wall = libtcod.Color(130, 110, 50)
-color_light_wall = libtcod.darkest_yellow
+color_light_wall = libtcod.dark_sepia
 #color_dark_ground = libtcod.Color(50, 50, 150)
-color_dark_ground = libtcod.darker_violet
+color_dark_ground = libtcod.darker_han
 #color_light_ground = libtcod.Color(200, 180, 50)
-color_light_ground = libtcod.darker_yellow
+color_light_ground = libtcod.sepia
+
+###################
+## Object Colors ##
+###################
+## Fighters ##
+PLAYER_COLOR = libtcod.white
+CYBORG_COLOR = libtcod.white
+MECHARACHNID_COLOR = libtcod.white
+TERMINATRON_COLOR = libtcod.dark_red
+
+## Items ##
+STAIRS_COLOR = libtcod.white
+PISTOL_COLOR = libtcod.white
+DAGGER_COLOR = libtcod.white
+TENMM_AMMO_COLOR = libtcod.white
 
 #################
 ## Shot Colors ##
@@ -939,7 +950,7 @@ def make_map():
             num_rooms += 1
 
     # create stairs at the center of the last room
-    stairs = Object(new_x, new_y, '>', 'stairs', libtcod.white, always_visible=True, z=STAIRS_Z_VAL)
+    stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
     objects.append(stairs)
     # stairs.send_to_back() #so it's drawn below the monsters
 
@@ -1085,7 +1096,7 @@ def from_dungeon_level(table):
 # TODO: Add all other colors
 def get_libtcod_color_from_string(color):
     if color == 'Blue':
-        return libtcod.blue
+        return libtcod.sky
     elif color == 'Red':
         return libtcod.red
     return libtcod.grey
@@ -1237,7 +1248,7 @@ def cyborg_death(monster):
     pistol_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and pistol_drop_chance < 5:
         equipment_component = create_pistol_equipment()
-        item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+        item = Object(x, y, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
 
     # drop ammo on death
@@ -1245,7 +1256,7 @@ def cyborg_death(monster):
     ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and ammo_drop_chance < 75:
         item_component = Item()
-        item = Object(x, y, '\'', '10mm ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
+        item = Object(x, y, '\'', '10mm ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
         objects.append(item)
         item.send_to_back()
 
@@ -1366,15 +1377,15 @@ def place_objects(room):
             if choice == 'terminatron':
                 fighter_component = create_terminatron_fighter_component()
                 ai_component = MeleeAI()
-                monster = Object(x, y, 'T', 'Terminatron', libtcod.dark_red, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'T', 'Terminatron', TERMINATRON_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'mecharachnid':
                 fighter_component = create_mecharachnid_fighter_component()
                 ai_component = MeleeAI()
-                monster = Object(x, y, 'm', 'Mecharachnid', libtcod.light_grey, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'm', 'Mecharachnid', MECHARACHNID_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
             elif choice == 'cyborg':
                 fighter_component = create_cyborg_fighter_component()
                 ai_component = CyborgAI()
-                monster = Object(x, y, 'c', 'Cyborg', libtcod.lightest_gray, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+                monster = Object(x, y, 'c', 'Cyborg', CYBORG_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
             objects.append(monster)
 
@@ -1408,15 +1419,15 @@ def place_objects(room):
             elif choice == 'dagger':
                 # create an energy dagger
                 equipment_component = create_dagger_equipment()
-                item = Object(x, y, '/', 'Dagger', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
                 # create a standard pistol
                 equipment_component = create_pistol_equipment()
-                item = Object(x, y, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
-                item = Object(x, y, '\'', '10mm Ammo', libtcod.gray, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '\'', '10mm Ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'health_canister':
                 # create a health canister
                 canister_component = create_health_canister_component()
@@ -1482,7 +1493,7 @@ def display_info_at_reticule():
         enemy = get_fighter_by_tile(reticule.x, reticule.y)
         if enemy is not None and enemy is not player:
             chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
-            string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%'
+            string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%'
     else: # if looking
         # create a list with the names of all objects at the reticule's coordinates and in FOV
         string = [obj.name for obj in objects
@@ -2551,7 +2562,7 @@ def new_game():
     
     #create object representing the player
     fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
-    player = Object(0, 0, '@', 'Player', libtcod.white, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
+    player = Object(0, 0, '@', 'Player', PLAYER_COLOR, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
     
@@ -2585,7 +2596,7 @@ def new_game():
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
     equipment_component = create_pistol_equipment()
-    obj = Object(0, 0, '}', 'Pistol', libtcod.gray, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
 
