@@ -4,6 +4,9 @@ import textwrap
 import shelve
 import random
 from time import sleep
+
+# TODO: Remove
+# This is a test!
  
 #actual size of the window
 SCREEN_WIDTH = 113
