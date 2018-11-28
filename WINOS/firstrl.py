@@ -2599,7 +2599,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=100, xp=0, ten_mm_rounds=7, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', PLAYER_COLOR, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -2634,18 +2634,20 @@ def new_game():
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
     equipment_component = create_pistol_equipment()
-    obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
-    inventory.append(obj)
-
-    equipment_component = create_dagger_equipment()
     equipment_component.is_identified = True
-    obj = Object(0, 0, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
 
-    canister_component = create_strength_canister_component()
-    obj = Object(0, 0, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
-    inventory.append(obj)
+    # equipment_component = create_dagger_equipment()
+    # equipment_component.is_identified = True
+    # obj = Object(0, 0, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
+    # equipment_component.equip()
+
+    # canister_component = create_strength_canister_component()
+    # obj = Object(0, 0, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
 
     # TODO: REMOVE THIS, TESTING
     #item_component = create_impact_grenade_item_component()
