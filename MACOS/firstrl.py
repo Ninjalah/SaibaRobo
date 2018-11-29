@@ -75,6 +75,10 @@ IS_STRENGTH_CANISTER_IDENTIFIED = False
 #########################
 ## Fixed Weapon Values ##
 #########################
+## List of weapons that use ammo ##
+TENMM_WEAPONS = ['Pistol']
+SHELL_WEAPONS = ['Shotgun']
+
 PROJECTILE_SLEEP_TIME = 0.01
 
 # Fists/Unarmed
@@ -85,6 +89,12 @@ PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = '1d3'
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
 PISTOL_ACCURACY_BONUS = 1
+
+# Shotgun
+SHOTGUN_RANGED_DAMAGE = '8d3'
+SHOTGUN_MELEE_DAMAGE = '1d3'
+SHOTGUN_RANGE = 15
+SHOTGUN_SPREAD = 3
 
 # Dagger
 DAGGER_DAMAGE = '2d4'
@@ -133,8 +143,10 @@ TERMINATRON_COLOR = libtcod.dark_red
 ## Items ##
 STAIRS_COLOR = libtcod.white
 PISTOL_COLOR = libtcod.white
+SHOTGUN_COLOR = libtcod.light_grey
 DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
+SHELLS_COLOR = libtcod.light_grey
 
 #################
 ## Shot Colors ##
@@ -241,6 +253,8 @@ class Object:
 
             self.x += dx
             self.y += dy
+        else:
+            self.fighter.has_moved_this_turn = False
 
     def move_reticule(self, dx, dy):
         #move the reticule by the given amount, don't check for blocking structures
@@ -344,7 +358,7 @@ class Object:
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
     def __init__(self, hp=0, strength=0, accuracy=0, finesse=0, evasion=0, armor=0, melee_damage=None, ranged_damage=None, xp=0, 
-        ten_mm_rounds=0, max_ten_mm_rounds=100, death_function=None, run_status=None, run_duration=0, has_moved_this_turn=False):
+        ten_mm_rounds=0, max_ten_mm_rounds=100, shells=0, max_shells=50, death_function=None, run_status=None, run_duration=0, has_moved_this_turn=False):
         self.base_max_hp = hp
         self.hp = hp
         self.base_strength = strength
@@ -358,6 +372,8 @@ class Fighter:
         self.xp = xp
         self.ten_mm_rounds = ten_mm_rounds
         self.max_ten_mm_rounds = max_ten_mm_rounds
+        self.shells = shells
+        self.max_shells = max_shells
         self.death_function = death_function
         self.run_status = run_status
         self.has_moved_this_turn = has_moved_this_turn
@@ -369,16 +385,16 @@ class Fighter:
             weapon = get_equipped_in_slot('weapon')
             if weapon is not None: # and if holding a weapon
                 if (self.strength != 0):
-                    return str(weapon.melee_damage) + '+' + str(self.strength)
+                    return get_combined_damage(weapon.melee_damage, self.strength)
                 else:
                     return str(weapon.melee_damage)
             else: # or if melee_damage is none (not holding weapon)
                 if (self.strength != 0):
-                    return UNARMED_DAMAGE + '+' + str(self.strength)
+                    return get_combined_damage(UNARMED_DAMAGE, self.strength)
                 else:
                     return UNARMED_DAMAGE
         else: # if Fighter is NOT player
-            return str(self.base_melee_damage) + '+' + str(self.strength)
+            return get_combined_damage(self.base_melee_damage, self.strength)
 
     @property
     def ranged_damage(self):
@@ -386,13 +402,13 @@ class Fighter:
             weapon = get_equipped_in_slot('weapon')
             if weapon is not None and weapon.ranged_damage is not None: # and if holding a weapon
                 if (self.finesse != 0):
-                    return str(weapon.ranged_damage) + '+' + str(self.finesse)
+                    return get_combined_damage(weapon.ranged_damage, self.finesse)
                 else:
                     return str(weapon.ranged_damage)
             else: # or if ranged_damage is none (not holding weapon)
                 return None
         else: # if Fighter is NOT player
-            return str(self.base_ranged_damage) + '+' + str(self.finesse)
+            return get_combined_damage(self.base_ranged_damage, self.finesse)
 
     @property
     def strength(self):
@@ -633,6 +649,17 @@ class Item:
                     message('Picked up some 10mm ammo!', libtcod.green)
                 else: # we're full on ammo
                     message('You cannot pick up any more 10mm ammo.', libtcod.yellow)
+            elif 'Shells' in self.owner.name: #if the item we're picking up is shells
+                amount_to_pickup = player.fighter.max_shells - player.fighter.shells
+                if amount_to_pickup > 0: #if we can pick up some ammo
+                    if self.owner.capacity > amount_to_pickup: # we can pick up SOME ammo
+                        player.fighter.shells += amount_to_pickup
+                    else: # we can pick up ALL the ammo and delete obj from world
+                        player.fighter.shells += self.owner.capacity
+                        objects.remove(self.owner)
+                    message('Picked up some shells!', libtcod.green)
+                else: # we're full on shells
+                    message('You cannot pick up any more shells.', libtcod.yellow)
         elif len(inventory) >= 26: # limited to 26 as there are 26 letters in the alphabet, A - Z
             message('Your inventory is full, cannot pick up ' + self.owner.name + '.', libtcod.yellow)
         else:
@@ -720,7 +747,7 @@ class Canister:
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
-    def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, max_ammo=0, ammo=0, melee_damage=None, ranged_damage=None, 
+    def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, spread=0, max_ammo=0, ammo=0, melee_damage=None, ranged_damage=None, 
         max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0, quality=None, is_identified=False):
         self.slot = slot
         self.melee_damage = melee_damage
@@ -736,6 +763,7 @@ class Equipment:
         self.max_ammo = ammo
         self.ammo = ammo
         self.max_range = range
+        self.spread = spread
         self.shoot_function = shoot_function
         self.quality = quality
         self.is_identified = is_identified
@@ -1011,7 +1039,6 @@ def d(sides):
 # b = bonus
 # p = sign
 def roll_dice(d_str):
-    print('D_str: ' + d_str)
     d_arr = d_str.split('d')
     n = int(d_arr[0])
     s = d_arr[1]
@@ -1085,6 +1112,30 @@ def roll_to_hit(accuracy_bonus=0, evasion_penalty=0):
     else:
         return False
 
+# function to combine multiple dice modifiers
+# Example: 2d4+2-1 -> 2d4+1
+# NOTE: dmg_str = 2d4+2 | bonus = 1
+def get_combined_damage(dmg_str, bonus):
+    if '+' in dmg_str: # if dmg_str has '+' mod
+        d = dmg_str.split('+')
+        b = int(d[1])
+        b += bonus
+        p = '+'
+    elif '-' in dmg_str: # if dmg_str has '-' mod
+        d = dmg_str.split('-')
+        b = 0 - int(d[1])
+        b += bonus
+        p = '-'
+    else: # if dmg_str has no mod
+        if bonus > 0:
+            return dmg_str + '+' + str(bonus)
+        elif bonus < 0:
+            return dmg_str + '-' + str(bonus)
+        else:
+            return dmg_str
+    
+    return d[0] + p + str(b)
+
 # returns a value that depends on level. the table specifies what value occurs after each level, default is 0
 def from_dungeon_level(table):
     for (value, level) in reversed(table):
@@ -1135,6 +1186,12 @@ def create_pistol_equipment():
         ranged_dmg += '-2'
 
     return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_damage=PISTOL_MELEE_DAMAGE, ranged_damage=ranged_dmg, accuracy_bonus=PISTOL_ACCURACY_BONUS, quality=quality)
+
+# Create and return a shotgun component
+def create_shotgun_equipment():
+    # TODO: Add shotgun qualities!!
+
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, range=SHOTGUN_RANGE, spread=SHOTGUN_SPREAD, shoot_function=cast_shoot_shotgun, melee_damage=SHOTGUN_MELEE_DAMAGE, ranged_damage=SHOTGUN_RANGED_DAMAGE, quality='Standard')
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -1213,14 +1270,19 @@ def create_cyborg_fighter_component():
 
 # ends game is player dies!
 def player_death(player):
-    global game_state
+    global game_state, color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
     message('You died!', libtcod.red)
     game_state = 'dead'
+    color_dark_wall = libtcod.darkest_grey
+    color_dark_ground = libtcod.darker_grey
+    color_light_wall = libtcod.darkest_red
+    color_light_ground = libtcod.darker_red
 
     # for added effect, transform the player into a corpse!
     player.char = '%'
     player.color = libtcod.dark_red
-
+    initialize_fov()
+    
 # transform into a nasty corpse! it doesn't block, can't be attacked, and doesn't move
 # NOTE: Generic monster death function
 def basic_monster_death(monster):
@@ -1329,8 +1391,10 @@ def place_objects(room):
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[5, 1]])
+    item_chances['shotgun'] = from_dungeon_level([[99, 1]]) # TODO: FIX THIS NUMBER
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['health_canister'] = from_dungeon_level([[20, 1]]) # TODO: Fix these numbers
+    item_chances['shell'] = from_dungeon_level([[999, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['health_canister'] = from_dungeon_level([[20, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
 
     # maximum number of traps
@@ -1421,13 +1485,21 @@ def place_objects(room):
                 equipment_component = create_dagger_equipment()
                 item = Object(x, y, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'pistol':
-                # create a standard pistol
+                # create a pistol
                 equipment_component = create_pistol_equipment()
                 item = Object(x, y, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'shotgun':
+                # create a shotgun
+                equipment_component = create_shotgun_equipment()
+                item = Object(x, y, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
-                item = Object(x, y, '\'', '10mm Ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+                item = Object(x, y, '"', '10mm Ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'shell':
+                # create shells
+                item_component = Item()
+                item = Object(x, y, '"', 'Shells', SHELLS_COLOR, capacity=5, max_capacity=50, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'health_canister':
                 # create a health canister
                 canister_component = create_health_canister_component()
@@ -1485,6 +1557,7 @@ def display_equipment_info():
 # get total ammo info and display
 def display_ammo_count():
     libtcod.console_print_ex(hud_panel, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
+    libtcod.console_print_ex(hud_panel, 1, 9, libtcod.BKGND_NONE, libtcod.LEFT, 'Shells: ' + str(player.fighter.shells) + '/' + str(player.fighter.max_shells))
 
 # display the chance to hit Fighter at Reticule
 def display_info_at_reticule():
@@ -1559,16 +1632,19 @@ def display_player_stats():
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, 'MELEE DMG: ')
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
-    if equipment.is_identified is True:
+    if equipment is None:
         libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
     else:
-        libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, '?')
+        if equipment.is_identified is True:
+            libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.melee_damage))
+        else:
+            libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 2, libtcod.BKGND_NONE, libtcod.LEFT, '?')
 
     # RANGED DAMAGE
     libtcod.console_set_default_foreground(hud_panel, libtcod.gold)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 - 5, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, 'RANGE DMG: ')
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
-    if equipment.is_identified is True:
+    if equipment is not None and equipment.is_identified is True:
         libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.ranged_damage))
     else:
         libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, '?')
@@ -2184,6 +2260,110 @@ def cast_shoot_pistol(dx, dy, weapon):
             message('Your ' + weapon.owner.name + ' is empty!', libtcod.orange)
             return 'cancelled'
 
+# shoot shotgun at tile (dx, dy)
+def cast_shoot_shotgun(dx, dy, weapon):
+    if weapon != None and weapon.is_ranged:
+        if dx is None: return 'cancelled'
+
+        if weapon.ammo > 0:
+            totalDamage = roll_dice(player.fighter.ranged_damage)
+            weapon.ammo -= 1
+
+            # AoE/cone effect calculation
+            # get a vector of SHOTGUN_MAX_RANGE parallel to the reticule position
+            # slope between player and reticule
+            m_x = dx - player.x
+            m_y = dy - player.y
+
+            while get_dist_between_points(player.x, player.y, dx, dy) < weapon.max_range:
+                dx += m_x
+                dy += m_y
+
+            # target = (dx, dy)
+            # TODO: REMOVE DEBUGGING STATEMENT
+            # libtcod.console_set_default_foreground(con, libtcod.yellow)
+            # libtcod.console_put_char(con, dx, dy, 'T', libtcod.BKGND_NONE)
+            # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+            # libtcod.console_flush()
+
+            # draw a square of (2 * SHOTGUN_SPREAD + 1) around this tile
+            length = (2 * weapon.spread) + 1
+            # target_square = [(dx - length/2, dy + length/2), (dx - length/2, dy - length/2), (dx + length/2, dy - length/2), (dx + length/2, dy + length/2)]
+            #s_top_left = (dx - length/2, dy - length/2)
+            #s_bottom_left = (dx - length/2, dy + length/2)
+            #s_top_right = (dx + length/2, dy - length/2)
+            #s_bottom_right = (dx + length/2, dy + length/2)
+
+            line_tiles = []
+            # for each tile here, add to list of tiles to draw lines to
+            for y in range(-MAP_HEIGHT, MAP_HEIGHT+weapon.max_range):
+                for x in range(-MAP_WIDTH, MAP_WIDTH+weapon.max_range):
+                    if x >= (dx - length/2) and x <= (dx + length/2) and y >= (dy - length/2) and y <= (dy + length/2):
+                        # Point is in square!
+                        # libtcod.console_set_default_foreground(con, libtcod.white)
+                        # libtcod.console_put_char(con, x, y, 'o', libtcod.BKGND_NONE)
+                        # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                        # libtcod.console_flush() 
+                        line_tiles.append((x, y))
+            
+            hit_tiles = []
+            puff_tiles = []
+            libtcod.console_set_default_foreground(con, libtcod.red)
+            # for each line_tile, draw a line to it (until hits a wall)
+            for x, y in line_tiles:
+                wall_found = False
+                libtcod.line_init(player.x, player.y, x, y)
+                x2, y2 = libtcod.line_step()
+                while wall_found is False and x2 is not None:
+                    obj = get_fighter_by_tile(x2, y2)
+                    if (x2, y2) not in hit_tiles:
+                        if is_blocked(x2, y2) and obj is not None: # HITS A FIGHTER
+                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                            # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            # libtcod.console_flush()
+                            if (x2, y2) not in hit_tiles:
+                                hit_tiles.append((x2, y2))
+                                puff_tiles.append((x2, y2))
+                        elif is_blocked(x2, y2) and obj is None: # HITS A WALL
+                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                            wall_found = True
+                            if (x2, y2) not in puff_tiles:
+                                puff_tiles.append((x2, y2))
+                            break
+                        else: # HITS NOTHING
+                            if (x2, y2) not in hit_tiles:
+                                hit_tiles.append((x2, y2))
+                    x2, y2 = libtcod.line_step()
+            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+            libtcod.console_flush()
+            sleep(0.1)
+            for x, y in puff_tiles:
+                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+            render_all()
+
+            # if a tile has a drawn line through it, apply damage (with dmg reduction = 7% * distance)
+            # TODO: REMOVE DEBUGGING STATEMENT
+            # libtcod.console_set_default_foreground(con, libtcod.red)
+            for x, y in hit_tiles:
+                # TODO: REMOVE DEBUGGING STATEMENT
+                # libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                # libtcod.console_flush()
+                f = get_fighter_by_tile(x, y)
+                if f is not None: # fighter found at tile (x, y)
+                    print('Before reduc: ' + str(totalDamage))
+                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.07))
+                    new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.07)))
+                    print('After reduc: ' + str(new_dmg))
+                    if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
+                        new_dmg = 1
+                    message(f.name + ' takes ' + str(new_dmg) + ' damage!', libtcod.orange)
+                    f.fighter.take_damage(new_dmg)
+
+        else:
+            message('Your ' + weapon.owner.name + ' is empty!', libtcod.red)
+            return 'cancelled'
+
 # shoot currently equipped weapon at tile (dx, dy)
 def cast_shoot(dx, dy):
     remove_reticule()
@@ -2200,31 +2380,88 @@ def cast_shoot_item(dx, dy, item):
     if item.name == 'Impact Grenade':
         cast_impact_grenade(dx, dy, item)
 
-# reload the weapon in your right hand
-def cast_reload():
-    weapon = get_equipped_in_slot('weapon')
-    ammo_to_reload = player.fighter.ten_mm_rounds > 0
+# return the ammo type corresponding to the weapon's shoot_function
+def get_ammo_type(shoot_function):
+    if shoot_function is cast_shoot_pistol:
+        return '10mm ammo'
+    elif shoot_function is cast_shoot_shotgun:
+        return 'shell'
 
-    if weapon != None and weapon.is_ranged and weapon.ammo < weapon.max_ammo and ammo_to_reload is True:
-        message('You reload ' + weapon.owner.name + '!', libtcod.orange)
-        amount_to_reload = weapon.max_ammo - weapon.ammo
-        if amount_to_reload > player.fighter.ten_mm_rounds: # if we can reload some but not all
+# returns bool corresponding to if Player has more than zero of that weapon type
+def can_reload_weapon(ammo_type):
+    if ammo_type is '10mm ammo':
+        return player.fighter.ten_mm_rounds > 0
+    elif ammo_type is 'shell':
+        return player.fighter.shells > 0
+    else:
+        return False
+
+# reloads the weapon passed into it
+def cast_reload_weapon(ammo_type, weapon):
+    amount_to_reload = weapon.max_ammo - weapon.ammo
+    print('Amount_to_reload: ' + str(amount_to_reload))
+    if ammo_type is '10mm ammo': # 10mm using weapons
+        if amount_to_reload > player.fighter.ten_mm_rounds: #can reload some, not all
             weapon.ammo += player.fighter.ten_mm_rounds
             player.fighter.ten_mm_rounds = 0
         else: # we can reload to full
             weapon.ammo += amount_to_reload
             player.fighter.ten_mm_rounds -= amount_to_reload
-        #equipped = get_equipped_in_slot(weapon.slot)
-        #equipped.ammo += equipped.max_ammo - equipped.ammo
-    elif weapon != None and weapon.is_ranged and weapon.ammo == weapon.max_ammo:
-        message(weapon.owner.name + ' is already full of ammo!', libtcod.red)
-        return 'cancelled'
-    elif weapon == None:
+    elif ammo_type is 'shell': # shell using weapons
+        if amount_to_reload > player.fighter.shells: #can reload some, not all
+            weapon.ammo += player.fighter.shells
+            player.fighter.shells = 0
+        else: # we can reload to full
+            weapon.ammo += amount_to_reload
+            player.fighter.shells -= amount_to_reload
+    message('You reload the ' + weapon.owner.name + '!', libtcod.orange)
+
+# reload the weapon in your right hand
+# TODO: Generalize for all weapons
+def cast_reload():
+    weapon = get_equipped_in_slot('weapon')
+
+    if weapon is not None and weapon.is_ranged: # if this is a ranged weapon
+        ammo_type = get_ammo_type(weapon.shoot_function) # get weapon type
+        print('Ammo_type: ' + ammo_type)
+        if weapon.ammo >= weapon.max_ammo: # already at full ammo!
+                message(weapon.owner.name + ' is already full of ammo!', libtcod.red)
+                return 'cancelled'
+        can_reload = can_reload_weapon(ammo_type) # can we reload the weapon?
+        if can_reload: # enough ammo
+            cast_reload_weapon(ammo_type, weapon)
+        else: # not enough ammo
+            message('No ammo!', libtcod.red)
+            return 'cancelled'
+    else: # is a melee weapon or no weapon equipped
         message('Nothing to reload!', libtcod.red)
         return 'cancelled'
-    elif ammo_to_reload is False:
-        message('No ammo!', libtcod.red)
-        return 'cancelled'
+    # weapon = get_equipped_in_slot('weapon')
+    
+    # has_ammo_to_reload = False
+    # if weapon is not None and weapon.is_ranged:
+    #     #has_ammo_to_reload = player.fighter.ten_mm_rounds > 0
+    #     ammo_type = get_ammo_type(weapon.owner.name)
+    #     has_ammo_to_reload = can_reload_weapon(ammo_type)
+
+    #     if weapon.ammo < weapon.max_ammo and has_ammo_to_reload is True:
+    #         message('You reload ' + weapon.owner.name + '!', libtcod.orange)
+    #         amount_to_reload = weapon.max_ammo - weapon.ammo
+    #         if amount_to_reload > player.fighter.ten_mm_rounds: # if we can reload some but not all
+    #             weapon.ammo += player.fighter.ten_mm_rounds
+    #             player.fighter.ten_mm_rounds = 0
+    #         else: # we can reload to full
+    #             weapon.ammo += amount_to_reload
+    #             player.fighter.ten_mm_rounds -= amount_to_reload
+    #     elif weapon != None and weapon.is_ranged and weapon.ammo == weapon.max_ammo:
+    #         message(weapon.owner.name + ' is already full of ammo!', libtcod.red)
+    #         return 'cancelled'
+    #     elif weapon == None:
+    #         message('Nothing to reload!', libtcod.red)
+    #         return 'cancelled'
+    #     elif has_ammo_to_reload is False:
+    #         message('No ammo!', libtcod.red)
+    #         return 'cancelled'
 
 ############################
 ## Trap Trigger Functions ##
@@ -2551,6 +2788,12 @@ def load_game():
 def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
     global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR
+    global color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
+
+    color_dark_wall = libtcod.darkest_han
+    color_light_wall = libtcod.dark_sepia
+    color_dark_ground = libtcod.darker_han
+    color_light_ground = libtcod.sepia
 
     #create empty reticule object
     reticule = None
@@ -2561,7 +2804,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=10000, xp=0, ten_mm_rounds=7, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', PLAYER_COLOR, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -2595,10 +2838,27 @@ def new_game():
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
-    equipment_component = create_pistol_equipment()
-    obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    # equipment_component = create_pistol_equipment()
+    # equipment_component.is_identified = True
+    # obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
+    # equipment_component.equip()
+
+    equipment_component = create_shotgun_equipment()
+    equipment_component.is_identified = True
+    obj = Object(0, 0, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
+
+    # equipment_component = create_dagger_equipment()
+    # equipment_component.is_identified = True
+    # obj = Object(0, 0, '/', 'Dagger', DAGGER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
+    # equipment_component.equip()
+
+    # canister_component = create_strength_canister_component()
+    # obj = Object(0, 0, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
 
     # TODO: REMOVE THIS, TESTING
     #item_component = create_impact_grenade_item_component()
