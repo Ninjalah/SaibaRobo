@@ -59,18 +59,24 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 5
 IMPACT_GRENADE_DAMAGE = '4d6+10'
+POISON_DAMAGE = 1 # per tick
+POISON_DURATION = 100
 
 ############################
 ## Canister Color Globals ##
 ############################
 HEALTH_CANISTER_COLOR = ''
 STRENGTH_CANISTER_COLOR = ''
+POISON_CANISTER_COLOR = ''
+ANTIDOTE_CANISTER_COLOR = ''
 
 ##############################
 ## Canister Is_Id'd Globals ##
 ##############################
 IS_HEALTH_CANISTER_IDENTIFIED = False
 IS_STRENGTH_CANISTER_IDENTIFIED = False
+IS_POISON_CANISTER_IDENTIFIED = False
+IS_ANTIDOTE_CANISTER_IDENTIFIED = False
 
 #########################
 ## Fixed Weapon Values ##
@@ -154,6 +160,14 @@ SHELLS_COLOR = libtcod.light_grey
 SHOT_CRIT_HIGH = libtcod.sky
 SHOT_CRIT_LOW = libtcod.red
 SHOT_NORMAL = libtcod.white
+
+################
+## Hud Colors ##
+################
+PLAYER_HP_FOREGROUND = libtcod.light_red
+PLAYER_HP_BACKGROUND = libtcod.darker_red
+PLAYER_XP_FOREGROUND = libtcod.dark_yellow
+PLAYER_XP_BACKGROUND = libtcod.darkest_yellow
 
 fov_recompute = True
 game_state = 'playing'
@@ -358,7 +372,8 @@ class Object:
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
     def __init__(self, hp=0, strength=0, accuracy=0, finesse=0, evasion=0, armor=0, melee_damage=None, ranged_damage=None, xp=0, 
-        ten_mm_rounds=0, max_ten_mm_rounds=100, shells=0, max_shells=50, death_function=None, run_status=None, run_duration=0, has_moved_this_turn=False):
+        ten_mm_rounds=0, max_ten_mm_rounds=100, shells=0, max_shells=50, death_function=None, run_status=None, run_duration=0, 
+        has_moved_this_turn=False, poison_status=False, poison_duration=0):
         self.base_max_hp = hp
         self.hp = hp
         self.base_strength = strength
@@ -368,7 +383,6 @@ class Fighter:
         self.base_armor = armor
         self.base_melee_damage = melee_damage
         self.base_ranged_damage = ranged_damage
-        self.run_duration = run_duration
         self.xp = xp
         self.ten_mm_rounds = ten_mm_rounds
         self.max_ten_mm_rounds = max_ten_mm_rounds
@@ -376,6 +390,9 @@ class Fighter:
         self.max_shells = max_shells
         self.death_function = death_function
         self.run_status = run_status
+        self.run_duration = run_duration
+        self.poison_status = poison_status
+        self.poison_duration = poison_duration
         self.has_moved_this_turn = has_moved_this_turn
 
     # return actual power, by summing up the bonuses from all equipped items
@@ -484,6 +501,25 @@ class Fighter:
         self.hp += amount
         if self.hp > self.base_max_hp:
             self.hp = self.base_max_hp
+
+    # poisons the fighter for a duration
+    def poison(self, duration):
+        global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
+        self.poison_status = True
+        self.poison_duration = duration
+        if self.owner is player:
+            # change HP bar to green to indicate Poisoned status
+            PLAYER_HP_FOREGROUND = libtcod.darker_green
+            PLAYER_HP_BACKGROUND = libtcod.darkest_green
+
+    # cures the fighter of their poison
+    def cure(self):
+        global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
+        self.poison_status = False
+        self.poison_duration = 0
+        PLAYER_HP_FOREGROUND = libtcod.light_red
+        PLAYER_HP_BACKGROUND = libtcod.darker_red
+        message(self.owner.name + ' looks better!', libtcod.green)
 
 # AI for melee monsters (chase, no ranged)
 class MeleeAI:
@@ -634,7 +670,7 @@ class Item:
         self.shootable = shootable
 
     def pick_up(self):
-        print('In pick_up()...')
+        # TODO: Generalize this function a bit more for ammo
         # add to the player's inventory and remove from map
         if self.owner.capacity is not None: # if ammo, add to player's ammo TODO: Generalize this function
             if "10mm" in self.owner.name: # if the item we're picking up is 10mm ammo
@@ -692,7 +728,8 @@ class Item:
 
         # special case: if the object has the Canister component, the "use" action is to quaff
         if self.owner.canister:
-            self.owner.canister.quaff()
+            if self.owner.canister.quaff() != 'cancelled':
+                inventory.remove(self.owner)
             return
 
         # just call the "use_function" if it is defined
@@ -726,11 +763,12 @@ class Canister:
             return get_canister_name_from_function(self.canister_function)
 
     def quaff(self):
-        self.canister_function()
-        if self.is_identified is False:
-            self.scan()
-        inventory.remove(self.owner)
-        return
+        if self.canister_function() != 'cancelled':
+            if self.is_identified is False:
+                self.scan()
+            return
+        else:
+            return 'cancelled'
 
     def scan(self):
         self.is_identified = True
@@ -743,6 +781,8 @@ class Canister:
             if c.canister and c.canister.color == self.color:
                 c.canister.is_identified = True
                 c.name = c.canister.get_name()
+        # set the global scan var to TRUE based on the canister function
+        set_global_scan_vars(self.canister_function)
         return
 
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
@@ -818,7 +858,7 @@ class Trap:
 
     def trigger(self):
         if self.trigger_function is None:
-            message('You hear a click, but nothing happens.')
+            message('You hear a click, but nothing happens.', libtcod.green)
         else:
             self.trigger_function(self.owner.x, self.owner.y)
 
@@ -1005,6 +1045,19 @@ def make_map():
         #print('Chance of ' + key + ' to spawn: ' + str((float(value) / item_sum) * 100))
     ##########################################################################################
 
+# function that sets the global identified vars to TRUE based on the function passed in (names may be unreliable)
+def set_global_scan_vars(canister_function):
+    global IS_HEALTH_CANISTER_IDENTIFIED, IS_STRENGTH_CANISTER_IDENTIFIED, IS_POISON_CANISTER_IDENTIFIED, IS_ANTIDOTE_CANISTER_IDENTIFIED
+
+    if canister_function is cast_heal:
+        IS_HEALTH_CANISTER_IDENTIFIED = True
+    elif canister_function is cast_increase_strength:
+        IS_STRENGTH_CANISTER_IDENTIFIED = True
+    elif canister_function is cast_poison:
+        IS_POISON_CANISTER_IDENTIFIED = True
+    elif canister_function is cast_antidote:
+        IS_ANTIDOTE_CANISTER_IDENTIFIED = True
+
 # choose one option from list of chances, returning its index
 def random_choice_index(chances):
     # the dice will land on some number between 1 and the sum of chances
@@ -1147,9 +1200,13 @@ def from_dungeon_level(table):
 # TODO: Add all other colors
 def get_libtcod_color_from_string(color):
     if color == 'Blue':
-        return libtcod.sky
+        return libtcod.azure
     elif color == 'Red':
         return libtcod.red
+    elif color == 'Green':
+        return libtcod.dark_green
+    elif color == 'Yellow':
+        return libtcod.yellow
     return libtcod.grey
 
 # returns a canister name string from the canister use function
@@ -1158,6 +1215,10 @@ def get_canister_name_from_function(function):
         return 'Health Canister'
     elif function == cast_increase_strength:
         return 'Strength Canister'
+    elif function == cast_poison:
+        return 'Poison Canister'
+    elif function == cast_antidote:
+        return 'Antidote Canister'
     else:
         return 'ADD CANISTER NAME'
 
@@ -1234,12 +1295,16 @@ def create_impact_grenade_item_component():
 #################################
 # Create and return a health canister component
 def create_health_canister_component():
-    print('HEALTH_CANISTER_COLOR: ' + HEALTH_CANISTER_COLOR)
     return Canister(color=HEALTH_CANISTER_COLOR, canister_function=cast_heal, is_identified=IS_HEALTH_CANISTER_IDENTIFIED)
 
 def create_strength_canister_component():
-    print('STRENGTH_CANISTER_COLOR: ' + STRENGTH_CANISTER_COLOR)
     return Canister(color=STRENGTH_CANISTER_COLOR, canister_function=cast_increase_strength, is_identified=IS_STRENGTH_CANISTER_IDENTIFIED)
+
+def create_poison_canister_component():
+    return Canister(color=POISON_CANISTER_COLOR, canister_function=cast_poison, is_identified=IS_POISON_CANISTER_IDENTIFIED)
+
+def create_antidote_canister_component():
+    return Canister(color=ANTIDOTE_CANISTER_COLOR, canister_function=cast_antidote, is_identified=IS_ANTIDOTE_CANISTER_IDENTIFIED)
 
 #############################
 ## Trap Creation Functions ##
@@ -1247,6 +1312,9 @@ def create_strength_canister_component():
 # Create and return an explosive trap component
 def create_explosive_trap_component():
     return Trap(is_triggered=False, trigger_function=trigger_explosive_trap)
+
+def create_poison_trap_component():
+    return Trap(is_triggered=False, trigger_function=trigger_poison_trap)
 
 ################################
 ## Monster Creation Functions ##
@@ -1318,7 +1386,7 @@ def cyborg_death(monster):
     ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
     if x is not None and ammo_drop_chance < 75:
         item_component = Item()
-        item = Object(x, y, '\'', '10mm ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
+        item = Object(x, y, '"', '10mm ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
         objects.append(item)
         item.send_to_back()
 
@@ -1385,17 +1453,19 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['scanner'] = from_dungeon_level([[20, 1]])
+    item_chances['scanner'] = from_dungeon_level([[15, 1]])
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[5, 1]])
-    item_chances['shotgun'] = from_dungeon_level([[99, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['shell'] = from_dungeon_level([[999, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['health_canister'] = from_dungeon_level([[20, 1]])
+    item_chances['shell'] = from_dungeon_level([[20, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['health_canister'] = from_dungeon_level([[25, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
+    item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['antidote_canister'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1404,6 +1474,7 @@ def place_objects(room):
     trap_chances = {}
     trap_chances['none'] = from_dungeon_level([[95, 1]])
     trap_chances['explosive_trap'] = from_dungeon_level([[5, 1]]) # TODO: DEBUGGING, CHANGE
+    trap_chances['poison_trap'] = from_dungeon_level([[5, 1]]) # TODO: DEBUGGING, CHANGE
 
     # choose random number of traps
     num_traps = libtcod.random_get_int(0, 0, max_traps)
@@ -1421,6 +1492,10 @@ def place_objects(room):
                     # create an explosive trap
                     trap_component = create_explosive_trap_component()
                     trap = Object(x, y, ' ', 'Explosive Trap', libtcod.red, blocks=False, trap=trap_component, always_visible=True, z=TRAP_Z_VAL)
+                elif choice == 'poison_trap':
+                    # create a poison trap
+                    trap_component = create_poison_trap_component()
+                    trap = Object(x, y, ' ', 'Poison Trap', libtcod.dark_green, blocks=False, trap=trap_component, always_visible=True, z=TRAP_Z_VAL)
 
                 if trap is not None:
                     print('Adding trap...')
@@ -1508,6 +1583,14 @@ def place_objects(room):
                 # create a strength canister
                 canister_component = create_strength_canister_component()
                 item = Object(x, y, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'poison_canister':
+                # create a poison canister
+                canister_component = create_poison_canister_component()
+                item = Object(x, y, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'antidote_canister':
+                # create a antidote canister
+                canister_component = create_antidote_canister_component()
+                item = Object(x, y, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
 
             objects.append(item)
             # item.send_to_back() # items appear below other objects
@@ -1580,6 +1663,14 @@ def display_info_at_reticule():
 def display_player_stats():
     # get equipment to test for identified status
     equipment = get_equipped_in_slot('weapon')
+
+    # HP AND XP
+    # show the player's health
+    render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.base_max_hp, PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND)
+
+    # show the player's XP
+    # TODO: THIS IS UNTESTED. Make sure this works with all levels/XP levels.
+    render_bar(1, 3, BAR_WIDTH, 'XP', player.fighter.xp, LEVEL_UP_XP, PLAYER_XP_FOREGROUND, PLAYER_XP_BACKGROUND)
 
     # RUN_STATUS
     if player.fighter.run_status == 'rested':
@@ -1750,13 +1841,6 @@ def render_all():
         libtcod.console_set_default_foreground(log_panel, color)
         libtcod.console_print_ex(log_panel, MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
         y += 1
-
-    # show the player's health
-    render_bar(1, 1, BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.base_max_hp, libtcod.light_red, libtcod.darker_red)
-
-    # show the player's XP
-    # TODO: THIS IS UNTESTED. Make sure this works with all levels/XP levels.
-    render_bar(1, 3, BAR_WIDTH, 'XP', player.fighter.xp, LEVEL_UP_XP, libtcod.dark_yellow, libtcod.darkest_yellow)
 
     # show the player's current level
     # TODO: Add titles next to the player's level
@@ -2041,7 +2125,7 @@ def take_aim(key_char):
         game_state = 'aiming'
         reticule = Object(x, y, 'X', 'Reticule', libtcod.green, always_visible=True, z=RETICULE_Z_VAL)
         message('Press \'F\' again to shoot weapon, any other key to cancel.', libtcod.cyan)
-    elif key_char == 'l': # if looking
+    elif key_char == ';': # if looking
         game_state = 'looking'
         reticule = Object(x, y, 'X', 'Reticule', libtcod.white, always_visible=True, z=RETICULE_Z_VAL)
         message('Press any key to cancel examining.', libtcod.cyan)
@@ -2068,18 +2152,41 @@ def move_reticule(dx, dy):
     # move reticule to specified coordinates
     reticule.move_reticule(dx, dy)
 
+########################
+## Canister Functions ##
+########################
+# TODO: Leverage these functions to work on player, mobs, etc. Later, it will be possible for the player to throw shady potions
+# at a mob to test what the potion is. Perhaps these functions can receive a coordinate tuple, and after it is thrown/used, get any
+# Fighter (or otherwise) object and apply the function to said object.
 # heal the player
 def cast_heal():
-    if player.fighter.hp == player.fighter.base_max_hp: # don't heal the player if at full hp already
+    if player.fighter.hp >= player.fighter.base_max_hp: # don't heal the player if at full hp already
         message('You are already at full health.', libtcod.red)
         return 'cancelled'
 
     message('Your wounds start to feel better!', libtcod.light_violet)
     player.fighter.heal(HEAL_AMOUNT)
 
+# increase the player's STR by 1
 def cast_increase_strength():
     message('You feel stronger.', libtcod.light_violet)
     player.fighter.strength += 1
+
+# poison the player
+def cast_poison():
+    global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
+
+    message('You don\'t feel so good...', libtcod.red)
+    player.fighter.poison(POISON_DURATION)
+
+# cures the player of poison (if poisoned)
+def cast_antidote():
+    global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
+
+    if not player.fighter.poison_status:
+        message('You drink from the canister, but nothing happens.', libtcod.red)
+    else:
+        player.fighter.cure()
 
 # scan an item to reveal its properties
 # TODO: Finish scan item
@@ -2389,9 +2496,9 @@ def get_ammo_type(shoot_function):
 
 # returns bool corresponding to if Player has more than zero of that weapon type
 def can_reload_weapon(ammo_type):
-    if ammo_type is '10mm ammo':
+    if ammo_type in '10mm ammo':
         return player.fighter.ten_mm_rounds > 0
-    elif ammo_type is 'shell':
+    elif ammo_type in 'shell':
         return player.fighter.shells > 0
     else:
         return False
@@ -2400,14 +2507,14 @@ def can_reload_weapon(ammo_type):
 def cast_reload_weapon(ammo_type, weapon):
     amount_to_reload = weapon.max_ammo - weapon.ammo
     print('Amount_to_reload: ' + str(amount_to_reload))
-    if ammo_type is '10mm ammo': # 10mm using weapons
+    if ammo_type in '10mm ammo': # 10mm using weapons
         if amount_to_reload > player.fighter.ten_mm_rounds: #can reload some, not all
             weapon.ammo += player.fighter.ten_mm_rounds
             player.fighter.ten_mm_rounds = 0
         else: # we can reload to full
             weapon.ammo += amount_to_reload
             player.fighter.ten_mm_rounds -= amount_to_reload
-    elif ammo_type is 'shell': # shell using weapons
+    elif ammo_type in 'shell': # shell using weapons
         if amount_to_reload > player.fighter.shells: #can reload some, not all
             weapon.ammo += player.fighter.shells
             player.fighter.shells = 0
@@ -2479,6 +2586,20 @@ def trigger_explosive_trap(dx, dy):
                 totalDamage = roll_dice(IMPACT_GRENADE_DAMAGE)
                 message('The ' + obj.name + ' gets burned for ' + str(totalDamage) + ' hit points.', libtcod.orange)
                 obj.fighter.take_damage(totalDamage)
+
+# Trigger Poison Trap
+def trigger_poison_trap(dx, dy):
+    global fov_map
+
+    fighter = get_fighter_by_tile(dx, dy)
+    if fighter is not None:
+        parts = ['leg', 'neck', 'arm', 'back', 'ass', 'side of the head']
+        random.shuffle(parts)
+        body_part = parts.pop()
+        # poison dart animation
+        message('A dart fires out of an adjacent wall and sticks ' + fighter.name + ' in the ' + body_part + '!', libtcod.red)
+        fighter.fighter.poison(POISON_DURATION)
+        fighter.fighter.take_damage(5)
 
 # a box for messages straight to MAIN MENU
 def msgbox(text, width=50):
@@ -2564,7 +2685,6 @@ def handle_keys():
 
             # cancel look with any key
             if key.c is not 0 and key.vk is not 0:
-                print('Cancelling look! ' + key_char)
                 game_state = 'playing'
                 remove_reticule()
                 return 'didnt-take-turn'
@@ -2735,7 +2855,7 @@ def handle_keys():
                     message('No weapon to shoot with!', libtcod.red)
 
             # call cast_look() function
-            if key_char == 'l':
+            if key_char == ';':
                 take_aim(key_char)
 
             if key_char == '.' and key.shift:
@@ -2787,7 +2907,9 @@ def load_game():
 # START A NEW GAME
 def new_game():
     global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
-    global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR
+    global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR, POISON_CANISTER_COLOR, ANTIDOTE_CANISTER_COLOR
+    global IS_HEALTH_CANISTER_IDENTIFIED, IS_STRENGTH_CANISTER_IDENTIFIED, IS_POISON_CANISTER_IDENTIFIED, IS_ANTIDOTE_CANISTER_IDENTIFIED
+    global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
     global color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
 
     color_dark_wall = libtcod.darkest_han
@@ -2804,7 +2926,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=10000, xp=0, ten_mm_rounds=7, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=100, xp=0, ten_mm_rounds=7, shells=6, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', PLAYER_COLOR, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -2820,10 +2942,22 @@ def new_game():
 
     # TODO: FINISH THIS
     # assign canister colors to canister types
-    colors = ['Blue', 'Red']
+    colors = ['Blue', 'Red', 'Green', 'Yellow']
     random.shuffle(colors)
     HEALTH_CANISTER_COLOR = colors.pop()
     STRENGTH_CANISTER_COLOR = colors.pop()
+    POISON_CANISTER_COLOR = colors.pop()
+    ANTIDOTE_CANISTER_COLOR = colors.pop()
+
+    # reset canisters back to identified=False status
+    IS_HEALTH_CANISTER_IDENTIFIED = False
+    IS_STRENGTH_CANISTER_IDENTIFIED = False
+    IS_POISON_CANISTER_IDENTIFIED = False
+    IS_ANTIDOTE_CANISTER_IDENTIFIED = False
+
+    # reset player's hp bar colors
+    PLAYER_HP_FOREGROUND = libtcod.light_red
+    PLAYER_HP_BACKGROUND = libtcod.darker_red
 
     #generate map (at this point it's not drawn to the screen)
     make_map()
@@ -2838,17 +2972,17 @@ def new_game():
     message('Welcome to MurDur Corps. Make it out alive. Good luck.', libtcod.red)
 
     # TODO: DELETE THIS DEBUGGING/TESTING CODE
-    # equipment_component = create_pistol_equipment()
-    # equipment_component.is_identified = True
-    # obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
-    # inventory.append(obj)
-    # equipment_component.equip()
-
-    equipment_component = create_shotgun_equipment()
+    equipment_component = create_pistol_equipment()
     equipment_component.is_identified = True
-    obj = Object(0, 0, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    obj = Object(0, 0, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
     inventory.append(obj)
     equipment_component.equip()
+
+    # equipment_component = create_shotgun_equipment()
+    # equipment_component.is_identified = True
+    # obj = Object(0, 0, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
+    # equipment_component.equip()
 
     # equipment_component = create_dagger_equipment()
     # equipment_component.is_identified = True
@@ -2856,8 +2990,12 @@ def new_game():
     # inventory.append(obj)
     # equipment_component.equip()
 
-    # canister_component = create_strength_canister_component()
+    # canister_component = create_health_canister_component()
     # obj = Object(0, 0, '!', canister_component.get_name(), get_libtcod_color_from_string(canister_component.color), canister=canister_component, always_visible=True, z=ITEM_Z_VAL)
+    # inventory.append(obj)
+
+    # item_component = create_scanner_item_component()
+    # obj = Object(0, 0, '#', 'Scanner', libtcod.white, item=item_component, always_visible=True, z=ITEM_Z_VAL)
     # inventory.append(obj)
 
     # TODO: REMOVE THIS, TESTING
@@ -2901,6 +3039,7 @@ def initialize_fov():
 # run the main game functions
 def play_game():
     global key, mouse
+    global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
 
     player_action = None
 
@@ -2932,6 +3071,12 @@ def play_game():
             for object in objects:
                 if object.ai:
                     object.ai.take_turn()
+                if object.fighter and object.fighter.poison_status:
+                    if object.fighter.poison_duration > 0:
+                        object.fighter.take_damage(POISON_DAMAGE)
+                        object.fighter.poison_duration -= 1
+                    elif object.fighter.poison_duration <= 0:
+                        object.fighter.cure()
 
 #############
 # MAIN LOOP #
