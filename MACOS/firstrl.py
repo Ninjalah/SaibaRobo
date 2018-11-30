@@ -788,7 +788,7 @@ class Canister:
 # an object that can be equipped, yielding bonuses. Automatically adds the Item component
 class Equipment:
     def __init__(self, slot, is_ranged=False, shoot_function=None, range=0, spread=0, max_ammo=0, ammo=0, melee_damage=None, ranged_damage=None, 
-        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0, quality=None, is_identified=False):
+        max_hp_bonus=0, strength_bonus=0, accuracy_bonus=0, finesse_bonus=0, evasion_bonus=0, armor_bonus=0):
         self.slot = slot
         self.melee_damage = melee_damage
         self.ranged_damage = ranged_damage
@@ -805,14 +805,9 @@ class Equipment:
         self.max_range = range
         self.spread = spread
         self.shoot_function = shoot_function
-        self.quality = quality
-        self.is_identified = is_identified
 
     def get_name(self):
-        if self.is_identified is False:
-            return self.owner.name
-        elif self.is_identified is True:
-            return self.quality + ' ' + self.owner.name
+        return self.owner.name
 
     def toggle_equip(self): # toggle equip status
         if self.is_equipped:
@@ -843,12 +838,6 @@ class Equipment:
         else:
             if self.use_function() != 'cancelled':
                 return
-
-    def scan(self):
-        self.is_identified = True
-        self.owner.name = self.get_name()
-        print('In equipment scan! ' + self.owner.name + ' Id\'d?: ' + str(self.is_identified))
-        return
 
 # a trap that triggers when walked over
 class Trap:
@@ -1228,52 +1217,15 @@ def get_canister_name_from_function(function):
 
 # Create and return a pistol component
 def create_pistol_equipment():
-    chance = libtcod.random_get_int(0, 0, 100) # roll for quality
-    ranged_dmg = PISTOL_RANGED_DAMAGE
-    quality = ''
-    if chance < 10:
-        quality = 'Flawless'
-        ranged_dmg += '+2'
-    elif chance < 25 and chance >= 10:
-        quality = 'Superior'
-        ranged_dmg += '+1'
-    elif chance < 55 and chance >= 25:
-        quality = 'Standard'
-    elif chance < 75 and chance >= 55:
-        quality = 'Inferior'
-        ranged_dmg += '-1'
-    elif chance <= 100 and chance >= 75:
-        quality = 'Makeshift'
-        ranged_dmg += '-2'
-
-    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_damage=PISTOL_MELEE_DAMAGE, ranged_damage=ranged_dmg, accuracy_bonus=PISTOL_ACCURACY_BONUS, quality=quality)
+    return Equipment(slot='weapon', ammo=7, is_ranged=True, shoot_function=cast_shoot_pistol, range=PISTOL_RANGE, melee_damage=PISTOL_MELEE_DAMAGE, ranged_damage=PISTOL_RANGED_DAMAGE, accuracy_bonus=PISTOL_ACCURACY_BONUS)
 
 # Create and return a shotgun component
 def create_shotgun_equipment():
-    # TODO: Add shotgun qualities!!
-
-    return Equipment(slot='weapon', ammo=1, is_ranged=True, range=SHOTGUN_RANGE, spread=SHOTGUN_SPREAD, shoot_function=cast_shoot_shotgun, melee_damage=SHOTGUN_MELEE_DAMAGE, ranged_damage=SHOTGUN_RANGED_DAMAGE, quality='Standard')
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, range=SHOTGUN_RANGE, spread=SHOTGUN_SPREAD, shoot_function=cast_shoot_shotgun, melee_damage=SHOTGUN_MELEE_DAMAGE, ranged_damage=SHOTGUN_RANGED_DAMAGE)
 
 # Create and return a dagger component
 def create_dagger_equipment():
-    chance = libtcod.random_get_int(0, 0, 100) # roll for quality
-    melee_dmg = DAGGER_DAMAGE
-    quality = ''
-    if chance < 10:
-        quality = 'Flawless'
-        melee_dmg += '+2'
-    elif chance < 25 and chance >= 10:
-        quality = 'Superior'
-        melee_dmg += '+1'
-    elif chance < 55 and chance >= 25:
-        quality = 'Standard'
-    elif chance < 75 and chance >= 55:
-        quality = 'Inferior'
-        melee_dmg += '-1'
-    elif chance <= 100 and chance >= 75:
-        quality = 'Makeshift'
-        melee_dmg += '-2'
-    return Equipment(slot='weapon', is_ranged=False, melee_damage=melee_dmg, accuracy_bonus=DAGGER_ACCURACY_BONUS, quality=quality)
+    return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
 
 #############################
 ## Item Creation Functions ##
