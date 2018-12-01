@@ -1581,6 +1581,7 @@ def get_names_under_mouse():
 # get equipment and ammo information from player
 def display_equipment_info():
     equipment_component = get_equipped_in_slot('weapon')
+    libtcod.console_set_default_foreground(hud_panel, libtcod.white)
     if equipment_component is not None: # if there is some equipped item
         if equipment_component.is_ranged: # if equipment is ranged
             libtcod.console_print_ex(hud_panel, 1, 7, libtcod.BKGND_NONE, libtcod.LEFT, str(equipment_component.owner.name) + ' (' + str(equipment_component.ammo) + '/' + str(equipment_component.max_ammo) + ')')
@@ -1591,6 +1592,7 @@ def display_equipment_info():
 
 # get total ammo info and display
 def display_ammo_count():
+    libtcod.console_set_default_foreground(hud_panel, libtcod.grey)
     libtcod.console_print_ex(hud_panel, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
     libtcod.console_print_ex(hud_panel, 1, 9, libtcod.BKGND_NONE, libtcod.LEFT, 'Shells: ' + str(player.fighter.shells) + '/' + str(player.fighter.max_shells))
 
@@ -1952,8 +1954,9 @@ def menu(header, options, width):
     # print all the options
     y = header_height
     letter_index = ord('a')
-    for option_text in options:
-        text = '(' + chr(letter_index) + ') ' + option_text
+    for text, color in options:
+        libtcod.console_set_default_foreground(window, color)
+        text = '(' + chr(letter_index) + ') ' + text
         libtcod.console_print_ex(window, 0, y, libtcod.BKGND_NONE, libtcod.LEFT, text)
         y += 1
         letter_index += 1
@@ -1995,7 +1998,7 @@ def inventory_menu(header):
     global inventory
 
     if len(inventory) == 0:
-        options = ['Inventory is empty.']
+        options = [('Inventory is empty.', libtcod.grey)]
     else:
         inventory.sort(key=lambda k: k.name, reverse=False)
         options = []
@@ -2005,7 +2008,7 @@ def inventory_menu(header):
             # show additional information, in case it's equipped
             if item.equipment and item.equipment.is_equipped:
                 text = text + ' (on ' + item.equipment.slot + ')'
-            options.append(text)
+            options.append((text, item.color))
 
     index = menu(header, options, INVENTORY_WIDTH)
 
@@ -2017,7 +2020,7 @@ def inventory_menu(header):
 def scan_menu(header):
     scan_inventory = []
     if inventory is not None and len(inventory) == 0:
-        options = ['Nothing to scan.']
+        options = [('Nothing to scan.', libtcod.grey)]
     else:
         inventory.sort(key=lambda k: k.name, reverse=False)
         options = []
@@ -2025,7 +2028,7 @@ def scan_menu(header):
             if item.canister and item.canister.is_identified is False:
                 scan_inventory.append(item)
                 text = item.name
-                options.append(text)
+                options.append((text, item.color))
 
     index = menu(header, options, INVENTORY_WIDTH)
 
@@ -3032,7 +3035,7 @@ def main_menu():
         libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT-2, libtcod.BKGND_NONE, libtcod.CENTER, 'By Ninjalah')
 
         # show options and wait for the player's choice
-        choice = menu('', ['Play a new game', 'Continue last game', 'Quit'], 24)
+        choice = menu('', [('Play a new game', libtcod.white), ('Continue last game', libtcod.light_grey), ('Quit', libtcod.grey)], 24)
 
         if choice == 0: #new game
             new_game()
