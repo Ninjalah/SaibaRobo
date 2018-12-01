@@ -1616,7 +1616,7 @@ def display_info_at_reticule():
 # display the player's stats to hud screen
 def display_player_stats():
     # get equipment to test for identified status
-    equipment = get_equipped_in_slot('weapon')
+    # equipment = get_equipped_in_slot('weapon')
 
     # HP AND XP
     # show the player's health
@@ -2029,6 +2029,9 @@ def scan_menu(header):
                 scan_inventory.append(item)
                 text = item.name
                 options.append((text, item.color))
+
+    if len(scan_inventory) == 0:
+        options = [('Nothing to scan.', libtcod.grey)]
 
     index = menu(header, options, INVENTORY_WIDTH)
 
