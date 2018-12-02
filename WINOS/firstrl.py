@@ -44,7 +44,7 @@ MAX_ROOMS = 99 # this was 30
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
-LEVEL_UP_BASE = 20000
+LEVEL_UP_BASE = 200
 LEVEL_UP_FACTOR = 150
 LEVEL_UP_XP = LEVEL_UP_BASE + LEVEL_UP_FACTOR
 
@@ -84,6 +84,7 @@ IS_ANTIDOTE_CANISTER_IDENTIFIED = False
 ## List of weapons that use ammo ##
 TENMM_WEAPONS = ['Pistol']
 SHELL_WEAPONS = ['Shotgun']
+FIFTYCAL_WEAPONS = ['Sniper']
 
 PROJECTILE_SLEEP_TIME = 0.01
 
@@ -94,13 +95,18 @@ UNARMED_DAMAGE = '1d3'
 PISTOL_RANGED_DAMAGE = '2d4'
 PISTOL_MELEE_DAMAGE = '1d3'
 PISTOL_RANGE = 5 #TODO: CHANGE THIS TO 12-15. FOV RANGE IS 10
-PISTOL_ACCURACY_BONUS = 1
+PISTOL_ACCURACY_BONUS = 2
 
 # Shotgun
 SHOTGUN_RANGED_DAMAGE = '8d3'
 SHOTGUN_MELEE_DAMAGE = '1d3'
 SHOTGUN_RANGE = 15
 SHOTGUN_SPREAD = 3
+
+# Sniper
+SNIPER_RANGED_DAMAGE = '3d6'
+SNIPER_MELEE_DAMAGE = '1d3'
+SNIPER_ACCURACY_BONUS = 4
 
 # Dagger
 DAGGER_DAMAGE = '2d4'
@@ -143,16 +149,18 @@ color_light_ground = libtcod.sepia
 ## Fighters ##
 PLAYER_COLOR = libtcod.white
 CYBORG_COLOR = libtcod.white
-MECHARACHNID_COLOR = libtcod.white
+MECHARACHNID_COLOR = libtcod.light_grey
 TERMINATRON_COLOR = libtcod.dark_red
 
 ## Items ##
 STAIRS_COLOR = libtcod.white
 PISTOL_COLOR = libtcod.white
 SHOTGUN_COLOR = libtcod.light_grey
+SNIPER_COLOR = libtcod.dark_green
 DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
 SHELLS_COLOR = libtcod.light_grey
+FIFTYCAL_AMMO_COLOR = libtcod.dark_green
 
 #################
 ## Shot Colors ##
@@ -372,7 +380,7 @@ class Object:
 # combat-related properties and methods (monster, player, NPC)
 class Fighter:
     def __init__(self, hp=0, strength=0, accuracy=0, finesse=0, evasion=0, armor=0, melee_damage=None, ranged_damage=None, xp=0, 
-        ten_mm_rounds=0, max_ten_mm_rounds=100, shells=0, max_shells=50, death_function=None, run_status=None, run_duration=0, 
+        ten_mm_rounds=0, max_ten_mm_rounds=100, shells=0, max_shells=50, fifty_cal_rounds=0, max_fifty_cal_rounds=25, death_function=None, run_status=None, run_duration=0, 
         has_moved_this_turn=False, poison_status=False, poison_duration=0):
         self.base_max_hp = hp
         self.hp = hp
@@ -388,6 +396,8 @@ class Fighter:
         self.max_ten_mm_rounds = max_ten_mm_rounds
         self.shells = shells
         self.max_shells = max_shells
+        self.fifty_cal_rounds = fifty_cal_rounds
+        self.max_fifty_cal_rounds = max_fifty_cal_rounds
         self.death_function = death_function
         self.run_status = run_status
         self.run_duration = run_duration
@@ -673,7 +683,7 @@ class Item:
         # TODO: Generalize this function a bit more for ammo
         # add to the player's inventory and remove from map
         if self.owner.capacity is not None: # if ammo, add to player's ammo TODO: Generalize this function
-            if "10mm" in self.owner.name: # if the item we're picking up is 10mm ammo
+            if '10mm' in self.owner.name: # if the item we're picking up is 10mm ammo
                 amount_to_pickup = player.fighter.max_ten_mm_rounds - player.fighter.ten_mm_rounds
                 if amount_to_pickup > 0: # if we can pick up some ammo
                     if self.owner.capacity > amount_to_pickup: # we can pick up some ammo, but not all
@@ -696,6 +706,17 @@ class Item:
                     message('Picked up some shells!', libtcod.green)
                 else: # we're full on shells
                     message('You cannot pick up any more shells.', libtcod.yellow)
+            elif '50cal' in self.owner.name: #if the item we're picking up is 50cal
+                amount_to_pickup = player.fighter.max_fifty_cal_rounds - player.fighter.fifty_cal_rounds
+                if amount_to_pickup > 0: #if we can pick up some ammo
+                    if self.owner.capacity > amount_to_pickup: # we can pick up SOME ammo
+                        player.fighter.fifty_cal_rounds += amount_to_pickup
+                    else: # we can pick up ALL the ammo and delete obj from world
+                        player.fighter.fifty_cal_rounds += self.owner.capacity
+                        objects.remove(self.owner)
+                    message('Picked up some .50cal ammo!', libtcod.green)
+                else: # we're full on shells
+                    message('You cannot pick up any more .50cal ammo.', libtcod.yellow)
         elif len(inventory) >= 26: # limited to 26 as there are 26 letters in the alphabet, A - Z
             message('Your inventory is full, cannot pick up ' + self.owner.name + '.', libtcod.yellow)
         else:
@@ -1227,6 +1248,10 @@ def create_shotgun_equipment():
 def create_dagger_equipment():
     return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
 
+# Create and return a sniper component
+def create_sniper_equipment():
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, shoot_function=cast_shoot_pistol, melee_damage=SNIPER_MELEE_DAMAGE, ranged_damage=SNIPER_RANGED_DAMAGE, accuracy_bonus=SNIPER_ACCURACY_BONUS)
+
 #############################
 ## Item Creation Functions ##
 #############################
@@ -1278,7 +1303,7 @@ def create_terminatron_fighter_component():
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
-    return Fighter(hp=15, armor=1, strength=3, accuracy=3, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
+    return Fighter(hp=15, armor=1, strength=3, accuracy=2, evasion=-1, melee_damage=MECHARACHNID_MELEE_DAMAGE, xp=100, death_function=basic_monster_death)
 
 # Create and return a cyborg fighter component
 def create_cyborg_fighter_component():
@@ -1412,8 +1437,10 @@ def place_objects(room):
     item_chances['dagger'] = from_dungeon_level([[15, 1]])
     item_chances['pistol'] = from_dungeon_level([[5, 1]])
     item_chances['shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['sniper'] = from_dungeon_level([[5, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
     item_chances['shell'] = from_dungeon_level([[20, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['50cal ammo'] = from_dungeon_level([[20, 1]])
     item_chances['health_canister'] = from_dungeon_level([[25, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
     item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
@@ -1515,6 +1542,10 @@ def place_objects(room):
                 # create a pistol
                 equipment_component = create_pistol_equipment()
                 item = Object(x, y, '}', 'Pistol', PISTOL_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'sniper':
+                # create a sniper
+                equipment_component = create_sniper_equipment()
+                item = Object(x, y, '}', 'Sniper', SNIPER_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'shotgun':
                 # create a shotgun
                 equipment_component = create_shotgun_equipment()
@@ -1527,6 +1558,10 @@ def place_objects(room):
                 # create shells
                 item_component = Item()
                 item = Object(x, y, '"', 'Shells', SHELLS_COLOR, capacity=5, max_capacity=50, item=item_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == '50cal ammo':
+                # create 50cal ammo
+                item_component = Item()
+                item = Object(x, y, '"', '.50cal Ammo', FIFTYCAL_AMMO_COLOR, capacity=3, max_capacity=25, item=item_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == 'health_canister':
                 # create a health canister
                 canister_component = create_health_canister_component()
@@ -1595,21 +1630,16 @@ def display_ammo_count():
     libtcod.console_set_default_foreground(hud_panel, libtcod.grey)
     libtcod.console_print_ex(hud_panel, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT, '10mm: ' + str(player.fighter.ten_mm_rounds) + '/' + str(player.fighter.max_ten_mm_rounds))
     libtcod.console_print_ex(hud_panel, 1, 9, libtcod.BKGND_NONE, libtcod.LEFT, 'Shells: ' + str(player.fighter.shells) + '/' + str(player.fighter.max_shells))
+    libtcod.console_print_ex(hud_panel, 1, 10, libtcod.BKGND_NONE, libtcod.LEFT, '50 Cal: ' + str(player.fighter.fifty_cal_rounds) + '/' + str(player.fighter.max_fifty_cal_rounds))
 
 # display the chance to hit Fighter at Reticule
 def display_info_at_reticule():
     string = ''
-    if game_state == 'aiming': # if aiming
-        enemy = get_fighter_by_tile(reticule.x, reticule.y)
-        if enemy is not None and enemy is not player:
-            chance_to_hit = 10 + (player.fighter.accuracy - enemy.fighter.evasion)
-            string = 'Chance to hit: ' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%'
-    else: # if looking
-        # create a list with the names of all objects at the reticule's coordinates and in FOV
-        string = [obj.name for obj in objects
-            if obj.x == reticule.x and obj.y == reticule.y and obj.name != 'Reticule' and ((libtcod.map_is_in_fov(fov_map, obj.x, obj.y) or (map[reticule.x][reticule.y].explored and obj.always_visible)))]
+    # create a list with the names of all objects at the reticule's coordinates and in FOV
+    string = [obj.name for obj in objects
+        if obj.x == reticule.x and obj.y == reticule.y and obj.name != 'Reticule' and ((libtcod.map_is_in_fov(fov_map, obj.x, obj.y) or (map[reticule.x][reticule.y].explored and obj.always_visible)))]
 
-        string = ', '.join(string) # join the names separated by commas
+    string = ', '.join(string) # join the names separated by commas
     
     return string
 
@@ -1686,6 +1716,21 @@ def display_player_stats():
     libtcod.console_set_default_foreground(hud_panel, libtcod.silver)
     libtcod.console_print_ex(hud_panel, HUD_WIDTH/2 + 6, SCREEN_HEIGHT/3 + 4, libtcod.BKGND_NONE, libtcod.LEFT, str(player.fighter.ranged_damage))
 
+# display enemy information (if within fov)
+def display_enemy_information():
+    global fov_map
+
+    # TODO: Only render X enemies at a time?
+    ind = 0
+    for obj in objects:
+        if obj.fighter and obj is not player and libtcod.map_is_in_fov(fov_map, obj.x, obj.y): # if the object is a Fighter and it's within FOV
+            libtcod.console_set_default_foreground(hud_panel, obj.color)
+            chance_to_hit = 10 + (player.fighter.accuracy - obj.fighter.evasion)
+            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2 + ind, libtcod.BKGND_NONE, libtcod.LEFT, obj.char + ' ' + obj.name + ' (' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%)')
+            # show the fighter's health
+            render_bar(1, SCREEN_HEIGHT/2 + ind + 1, int(BAR_WIDTH/1.25), 'HP', obj.fighter.hp, obj.fighter.base_max_hp, PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND)
+            ind += 3
+
 # render game information to screen
 def render_all():
     global fov_map, color_dark_wall, color_light_wall
@@ -1749,7 +1794,7 @@ def render_all():
         if libtcod.map_is_in_fov(fov_map, reticule.x, reticule.y) or map[reticule.x][reticule.y].explored:
             # display names of objects under the mouse
             libtcod.console_set_default_foreground(hud_panel, libtcod.light_grey) #changed to light_gray
-            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, display_info_at_reticule())
+            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2-1, libtcod.BKGND_NONE, libtcod.LEFT, display_info_at_reticule())
         reticule.draw()
         libtcod.line_init(player.x, player.y, reticule.x, reticule.y)
         prev_x, prev_y = player.x, player.y
@@ -1808,6 +1853,9 @@ def render_all():
     # display names of objects under the mouse
     libtcod.console_set_default_foreground(hud_panel, libtcod.light_grey) #changed to light_gray
     libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2, libtcod.BKGND_NONE, libtcod.LEFT, get_names_under_mouse())
+
+    # display enemy information if within fov
+    display_enemy_information()
 
     # blit the contents of "panel" to the root console
     libtcod.console_blit(log_panel, 0, 0, SCREEN_WIDTH - HUD_WIDTH, LOG_HEIGHT, 0, 0, LOG_Y)
@@ -1892,6 +1940,7 @@ def target_monster(max_range=None):
 # see if the player's experience is enough to level-up
 # TODO: REVAMP THIS FUNCTION TOTALLY
 def check_level_up():
+    global LEVEL_UP_XP, LEVEL_UP_BASE, LEVEL_UP_FACTOR
     LEVEL_UP_XP = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
     if player.fighter.xp >= LEVEL_UP_XP:
         # level up!
@@ -1902,17 +1951,23 @@ def check_level_up():
         choice = None
         while choice == None: # keep asking until a choice is made
             choice = menu('Level up! Choose a stat to raise:\n',
-                ['Health (+20 HP, from ' + str(player.fighter.base_max_hp) + ')',
-                'Attack (+1 attack, from ' + str(player.fighter.base_power) + ')',
-                'Defense (+1 defense, from ' + str(player.fighter.base_defense) + ')'], LEVEL_SCREEN_WIDTH)
+                [('Health (+10 HP, from ' + str(player.fighter.base_max_hp) + ')', libtcod.light_red),
+                ('Strength (+1 STR, from ' + str(player.fighter.base_strength) + ')', libtcod.orange),
+                ('Finesse (+1 FIN, from ' + str(player.fighter.base_finesse) + ')', libtcod.light_blue),
+                ('Accuracy (+1 ACC, from ' + str(player.fighter.base_accuracy) + ')', libtcod.light_green),
+                ('Evasion (+1 EVA, from ' + str(player.fighter.base_evasion) + ')', libtcod.light_purple)], LEVEL_SCREEN_WIDTH)
 
         if choice == 0:
-            player.fighter.base_max_hp += 20
-            player.fighter.hp += 20
+            player.fighter.base_max_hp += 10
+            player.fighter.hp += 10
         elif choice == 1:
-            player.fighter.base_power += 1
+            player.fighter.base_strength += 1
         elif choice == 2:
-            player.fighter.base_defense += 1
+            player.fighter.base_finesse += 1
+        elif choice == 3:
+            player.fighter.base_accuracy += 1
+        elif choice == 4:
+            player.fighter.base_evasion += 1
 
 # returns the equipment in a slot, or None if it's empty
 def get_equipped_in_slot(slot):
@@ -2414,6 +2469,107 @@ def cast_shoot_shotgun(dx, dy, weapon):
             message('Your ' + weapon.owner.name + ' is empty!', libtcod.red)
             return 'cancelled'
 
+# shoot sniper at tile (dx, dy)
+def cast_shoot_sniper(dx, dy, weapon):
+    monsterFound = False
+
+    if weapon != None and weapon.is_ranged:
+        if dx is None: return 'cancelled'
+
+        if weapon.ammo > 0:
+            totalDamage = roll_dice(player.fighter.ranged_damage)
+            weapon.ammo -= 1
+
+            # check if player shot themselves
+            if (player.x == dx and player.y == dy):
+                message(player.name + ' shoots themselves for ' + str(totalDamage) + ' hit points!', libtcod.red)
+                player.fighter.take_damage(totalDamage)
+                return # exit the function
+
+            # slope between player and reticule
+            m_x = dx - player.x
+            m_y = dy - player.y
+            # starting x and y
+            start_x = player.x
+            start_y = player.y
+
+            # Find furthest blocking tile
+            hasHit = False
+            
+            while (hasHit is False):
+                libtcod.line_init(start_x, start_y, dx, dy)
+                prev_x, prev_y = start_x, start_y
+                x, y = libtcod.line_step()
+                while (x is not None):
+                    (min, max) = get_min_max_dmg(player.fighter.ranged_damage)
+                    if (totalDamage == max):
+                        libtcod.console_set_default_foreground(con, SHOT_CRIT_HIGH)
+                    elif (totalDamage == min):
+                        libtcod.console_set_default_foreground(con, SHOT_CRIT_LOW)
+                    else:
+                        libtcod.console_set_default_foreground(con, SHOT_NORMAL)
+                    #if libtcod.map_is_in_fov(fov_map, x, y):
+                    normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
+                    if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
+                        libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                    elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
+                        libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
+                    elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
+                        libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
+                    elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
+                        libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
+                    else: # TODO: DEBUG: this shouldn't be reached but if so, debug
+                        libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
+                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                    libtcod.console_flush()
+                    sleep(PROJECTILE_SLEEP_TIME)
+                    obj = get_object_by_tile(x, y)
+                    if is_blocked(x, y) and obj is not None and obj.fighter is not None and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
+                        #if libtcod.map_is_in_fov(fov_map, x, y):
+                        libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                        libtcod.console_flush()
+                        sleep(PROJECTILE_SLEEP_TIME)
+                        hit_obj = get_fighter_by_tile(x, y)
+                        hasHit = True
+                        if hit_obj and hit_obj.fighter:
+                            monsterFound = True
+                            message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                            hit_obj.fighter.take_damage(totalDamage)
+                            break
+                        if monsterFound is False:
+                            message('The shot misses any meaningful target.', libtcod.red)
+                        break
+                    elif is_blocked(x, y) and obj is None:
+                        #if libtcod.map_is_in_fov(fov_map, x, y):
+                        libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                        libtcod.console_flush()
+                        sleep(PROJECTILE_SLEEP_TIME)
+                        hasHit = True
+                        message('The shot misses any meaningful target.', libtcod.red)
+                        break
+                    else:
+                        libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                        # redraws objs if a bullet is shot over them
+                        #if obj is not None:
+                        #    obj.draw()
+                        render_all()
+                        prev_x, prev_y = x, y
+                        x, y = libtcod.line_step()
+                if (x is not None): # delete bullet char from spot hit
+                    libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                # bullet reached reticule, extend reticule
+                start_x = dx
+                start_y = dy
+                dx = dx + m_x
+                dy = dy + m_y
+
+        else:
+            message('Your ' + weapon.owner.name + ' is empty!', libtcod.orange)
+            return 'cancelled'
+
 # shoot currently equipped weapon at tile (dx, dy)
 def cast_shoot(dx, dy):
     remove_reticule()
@@ -2436,6 +2592,8 @@ def get_ammo_type(shoot_function):
         return '10mm ammo'
     elif shoot_function is cast_shoot_shotgun:
         return 'shell'
+    elif shoot_function is cast_shoot_sniper:
+        return '50cal ammo'
 
 # returns bool corresponding to if Player has more than zero of that weapon type
 def can_reload_weapon(ammo_type):
@@ -2443,6 +2601,8 @@ def can_reload_weapon(ammo_type):
         return player.fighter.ten_mm_rounds > 0
     elif ammo_type in 'shell':
         return player.fighter.shells > 0
+    elif ammo_type in '50cal ammo':
+        return player.fighter.fifty_cal_rounds > 0
     else:
         return False
 
@@ -2464,6 +2624,13 @@ def cast_reload_weapon(ammo_type, weapon):
         else: # we can reload to full
             weapon.ammo += amount_to_reload
             player.fighter.shells -= amount_to_reload
+    elif ammo_type in '50cal ammo': # 50cal using weapons
+        if amount_to_reload > player.fighter.fifty_cal_rounds: #can reload some, not all
+            weapon.ammo += player.fighter.fifty_cal_rounds
+            player.fighter.fifty_cal_rounds = 0
+        else: # we can reload to full
+            weapon.ammo += amount_to_reload
+            player.fighter.fifty_cal_rounds -= amount_to_reload
     message('You reload the ' + weapon.owner.name + '!', libtcod.orange)
 
 # reload the weapon in your right hand
@@ -3053,8 +3220,8 @@ def main_menu():
         elif choice == 2: # quit
             break
 
-libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-#libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+# libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
