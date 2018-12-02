@@ -156,11 +156,11 @@ TERMINATRON_COLOR = libtcod.dark_red
 STAIRS_COLOR = libtcod.white
 PISTOL_COLOR = libtcod.white
 SHOTGUN_COLOR = libtcod.light_grey
-SNIPER_COLOR = libtcod.dark_green
+SNIPER_COLOR = libtcod.darker_green
 DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
 SHELLS_COLOR = libtcod.light_grey
-FIFTYCAL_AMMO_COLOR = libtcod.dark_green
+FIFTYCAL_AMMO_COLOR = libtcod.darker_green
 
 #################
 ## Shot Colors ##
