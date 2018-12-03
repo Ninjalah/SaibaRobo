@@ -103,6 +103,12 @@ SHOTGUN_MELEE_DAMAGE = '1d3'
 SHOTGUN_RANGE = 15
 SHOTGUN_SPREAD = 3
 
+# Sawed-off Shotgun (double shotgun)
+DOUBLE_SHOTGUN_RANGED_DAMAGE = '18d3'
+DOUBLE_SHOTGUN_MELEE_DAMAGE = '1d3'
+DOUBLE_SHOTGUN_RANGE = 8
+DOUBLE_SHOTGUN_SPREAD = 6
+
 # Sniper
 SNIPER_RANGED_DAMAGE = '3d6'
 SNIPER_MELEE_DAMAGE = '1d3'
@@ -134,13 +140,9 @@ LIMIT_FPS = 60  #60 frames-per-second maximum
 #####################
 ## Lighting Colors ##
 #####################
-# color_dark_wall = libtcod.Color(0, 0, 100)
 color_dark_wall = libtcod.darkest_han
-# color_light_wall = libtcod.Color(130, 110, 50)
 color_light_wall = libtcod.dark_sepia
-#color_dark_ground = libtcod.Color(50, 50, 150)
 color_dark_ground = libtcod.darker_han
-#color_light_ground = libtcod.Color(200, 180, 50)
 color_light_ground = libtcod.sepia
 
 ###################
@@ -156,6 +158,7 @@ TERMINATRON_COLOR = libtcod.dark_red
 STAIRS_COLOR = libtcod.white
 PISTOL_COLOR = libtcod.white
 SHOTGUN_COLOR = libtcod.light_grey
+DOUBLE_SHOTGUN_COLOR = libtcod.blue
 SNIPER_COLOR = libtcod.darker_green
 DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
@@ -1244,6 +1247,10 @@ def create_pistol_equipment():
 def create_shotgun_equipment():
     return Equipment(slot='weapon', ammo=1, is_ranged=True, range=SHOTGUN_RANGE, spread=SHOTGUN_SPREAD, shoot_function=cast_shoot_shotgun, melee_damage=SHOTGUN_MELEE_DAMAGE, ranged_damage=SHOTGUN_RANGED_DAMAGE)
 
+# Create and return a double shotgun component
+def create_double_shotgun_equipment():
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, range=DOUBLE_SHOTGUN_RANGE, spread=DOUBLE_SHOTGUN_SPREAD, shoot_function=cast_shoot_double_shotgun, melee_damage=DOUBLE_SHOTGUN_MELEE_DAMAGE, ranged_damage=DOUBLE_SHOTGUN_RANGED_DAMAGE)
+
 # Create and return a dagger component
 def create_dagger_equipment():
     return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
@@ -1430,21 +1437,22 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['scanner'] = from_dungeon_level([[15, 1]])
+    item_chances['scanner'] = from_dungeon_level([[5, 1]])
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
-    item_chances['dagger'] = from_dungeon_level([[15, 1]])
-    item_chances['pistol'] = from_dungeon_level([[5, 1]])
-    item_chances['shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['dagger'] = from_dungeon_level([[10, 1]])
+    item_chances['pistol'] = from_dungeon_level([[10, 1]])
+    item_chances['shotgun'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['double_shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
     item_chances['sniper'] = from_dungeon_level([[5, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
     item_chances['shell'] = from_dungeon_level([[20, 1]]) # TODO: FIX THIS NUMBER
     item_chances['50cal ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['health_canister'] = from_dungeon_level([[25, 1]])
+    item_chances['health_canister'] = from_dungeon_level([[15, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
     item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['antidote_canister'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['antidote_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1550,6 +1558,10 @@ def place_objects(room):
                 # create a shotgun
                 equipment_component = create_shotgun_equipment()
                 item = Object(x, y, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'double_shotgun':
+                # create a double shotgun
+                equipment_component = create_double_shotgun_equipment()
+                item = Object(x, y, '}', 'Sawed-off Shotgun', DOUBLE_SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
@@ -2456,9 +2468,87 @@ def cast_shoot_shotgun(dx, dy, weapon):
                 # libtcod.console_flush()
                 f = get_fighter_by_tile(x, y)
                 if f is not None: # fighter found at tile (x, y)
-                    print('Before reduc: ' + str(totalDamage))
-                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.07))
                     new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.07)))
+                    if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
+                        new_dmg = 1
+                    message(f.name + ' takes ' + str(new_dmg) + ' damage!', libtcod.orange)
+                    f.fighter.take_damage(new_dmg)
+
+        else:
+            message('Your ' + weapon.owner.name + ' is empty!', libtcod.red)
+            return 'cancelled'
+
+# shoot double shotgun at tile (dx, dy)
+def cast_shoot_double_shotgun(dx, dy, weapon):
+    if weapon != None and weapon.is_ranged:
+        if dx is None: return 'cancelled'
+
+        if weapon.ammo > 0:
+            totalDamage = roll_dice(player.fighter.ranged_damage)
+            weapon.ammo -= 1
+
+            # AoE/cone effect calculation
+            # get a vector of SHOTGUN_MAX_RANGE parallel to the reticule position
+            # slope between player and reticule
+            m_x = dx - player.x
+            m_y = dy - player.y
+
+            while get_dist_between_points(player.x, player.y, dx, dy) < weapon.max_range:
+                dx += m_x
+                dy += m_y
+
+            # draw a square of (2 * SHOTGUN_SPREAD + 1) around this tile
+            length = (2 * weapon.spread) + 1
+
+            line_tiles = []
+            # for each tile here, add to list of tiles to draw lines to
+            for y in range(-MAP_HEIGHT, MAP_HEIGHT+weapon.max_range):
+                for x in range(-MAP_WIDTH, MAP_WIDTH+weapon.max_range):
+                    if x >= (dx - length/2) and x <= (dx + length/2) and y >= (dy - length/2) and y <= (dy + length/2):
+                        line_tiles.append((x, y))
+            
+            hit_tiles = []
+            puff_tiles = []
+            libtcod.console_set_default_foreground(con, libtcod.red)
+            # for each line_tile, draw a line to it (until hits a wall)
+            for x, y in line_tiles:
+                wall_found = False
+                libtcod.line_init(player.x, player.y, x, y)
+                x2, y2 = libtcod.line_step()
+                while wall_found is False and x2 is not None:
+                    obj = get_fighter_by_tile(x2, y2)
+                    if (x2, y2) not in hit_tiles:
+                        if is_blocked(x2, y2) and obj is not None: # HITS A FIGHTER
+                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                            # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            # libtcod.console_flush()
+                            if (x2, y2) not in hit_tiles:
+                                hit_tiles.append((x2, y2))
+                                puff_tiles.append((x2, y2))
+                        elif is_blocked(x2, y2) and obj is None: # HITS A WALL
+                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                            wall_found = True
+                            if (x2, y2) not in puff_tiles:
+                                puff_tiles.append((x2, y2))
+                            break
+                        else: # HITS NOTHING
+                            if (x2, y2) not in hit_tiles:
+                                hit_tiles.append((x2, y2))
+                    x2, y2 = libtcod.line_step()
+            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+            libtcod.console_flush()
+            sleep(0.1)
+            for x, y in puff_tiles:
+                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+            render_all()
+
+            # if a tile has a drawn line through it, apply damage (with dmg reduction = 7% * distance)
+            for x, y in hit_tiles:
+                f = get_fighter_by_tile(x, y)
+                if f is not None: # fighter found at tile (x, y)
+                    print('Before reduc: ' + str(totalDamage))
+                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.15))
+                    new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.15)))
                     print('After reduc: ' + str(new_dmg))
                     if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
                         new_dmg = 1
@@ -2590,7 +2680,7 @@ def cast_shoot_item(dx, dy, item):
 def get_ammo_type(shoot_function):
     if shoot_function is cast_shoot_pistol:
         return '10mm ammo'
-    elif shoot_function is cast_shoot_shotgun:
+    elif shoot_function is cast_shoot_shotgun or shoot_function is cast_shoot_double_shotgun:
         return 'shell'
     elif shoot_function is cast_shoot_sniper:
         return '50cal ammo'
@@ -3220,8 +3310,8 @@ def main_menu():
         elif choice == 2: # quit
             break
 
-# libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+# libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
