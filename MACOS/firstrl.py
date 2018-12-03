@@ -224,7 +224,7 @@ class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
     # TODO: Remove max_capacity from game? Currently no purpose.
-    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, canister=None, trap=None, z=0):
+    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, canister=None, trap=None, door=None, z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -251,6 +251,10 @@ class Object:
         if self.trap: # let the Trap component know who owns it
             self.trap.owner = self
 
+        self.door = door
+        if self.door: # let the Door component know who owns it
+            self.door.owner = self
+
         self.canister = canister
         if self.canister: # let the Canister component know who owns it
             self.canister.owner = self
@@ -272,7 +276,7 @@ class Object:
     def move(self, dx, dy):
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
-            self.clear()
+            # self.clear()
             if self.fighter is not None:
                 self.fighter.has_moved_this_turn = True
                 if (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2:
@@ -878,6 +882,30 @@ class Trap:
         else:
             self.trigger_function(self.owner.x, self.owner.y)
 
+# a door object that opens when the player 'bumps' into it, if unlocked
+class Door:
+    def __init__(self, is_open=False, is_locked=False):
+        self.is_open = is_open
+        self.is_locked = is_locked
+    
+    def open(self):
+        global map
+        print('Attempting to open door...')
+        if not self.is_open and not self.is_locked:
+            self.is_open = True
+            self.owner.char = '/'
+            self.owner.blocks = False
+            carve((self.owner.x, self.owner.y))
+    
+    def close(self):
+        global map
+        print('Attempting to close door...')
+        if self.is_open and not self.is_locked:
+            self.is_open = False
+            self.owner.char = '+'
+            self.owner.blocks = True
+            uncarve((self.owner.x, self.owner.y))
+
 ########################
 # FUNCTION DEFINITIONS #
 ########################
@@ -1038,29 +1066,49 @@ def remove_dead_ends():
 
     cardinal_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
     done = False
-    p = 0
 
     while not done:
         done = True
-        p += 1
-        print('Pass: ' + str(p))
-        if p < 1000:
-            for y in range(MAP_HEIGHT):
-                for x in range(MAP_WIDTH):
-                    if not is_blocked(x, y):
-                        exits = 0
-                        for direction in cardinal_directions:
-                            (dx, dy) = direction
-                            if x + dx < MAP_WIDTH and x + dx > 0 and y + dy < MAP_HEIGHT and y + dy > 0:
-                                if not is_blocked(x + dx, y + dy):
-                                    exits += 1
-                        
-                        if exits == 1:
-                            done = False
-                            uncarve((x, y))
+        for y in range(MAP_HEIGHT):
+            for x in range(MAP_WIDTH):
+                if not is_blocked(x, y):
+                    exits = 0
+                    for direction in cardinal_directions:
+                        (dx, dy) = direction
+                        if x + dx < MAP_WIDTH and x + dx > 0 and y + dy < MAP_HEIGHT and y + dy > 0:
+                            if not is_blocked(x + dx, y + dy):
+                                exits += 1
+                    
+                    if exits == 1:
+                        done = False
+                        uncarve((x, y))
+
+# TODO: Finish this function
+# place doors
+# 1) iterate through the map, (x, y) 
+# 2) if (x, y) is in rooms list, continue
+# 3) pick a cardinal direction (from all directions), if the next tile is also open but have two opposing walls, place a door
+def place_doors():
+    global map, rooms, objects, fov_recompute
+
+    x_cardinal_directions = [(-1, 0), (1, 0)]
+    y_cardinal_directions = [(0, -1), (0, 1)]
+
+    for y in range(MAP_HEIGHT):
+        for x in range(MAP_WIDTH):
+            r = Rect(x, y, 1, 1)
+            for room in rooms:
+                if r.intersect(room):
+                    for (dx, dy) in x_cardinal_directions:
+                        r2 = Rect(x+dx, y+dy, 1, 1)
+                        if not is_blocked(x, y) and (x + dx) < MAP_WIDTH and (x + dx) > 0 and not is_blocked(x+dx, y+dy) and (x + dx * 2) < MAP_WIDTH and (x + dx * 2) > 0 and not is_blocked(x+dx*2, y+dy*2) and not r2.intersect(room):
+                            door_component = create_door_component()
+                            door = Object(x, y, '+', 'Door', libtcod.white, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                            door.door.close()
+                            objects.append(door)
 
 def make_map():
-    global map, objects, stairs
+    global map, objects, stairs, rooms
     global CURRENT_REGION, WINDING_PERCENTAGE
 
     # inverse chance of adding a connector between two regions that are already joined.
@@ -1098,7 +1146,6 @@ def make_map():
         y = y * 2 + 1
 
         #"Rect" class makes rectangles easier to work with
-        print('w, h, x, y: ' + str(w) + ', ' + str(h) + ', ' + str(x) + ', ' + str(y))
         new_room = Rect(x, y, w, h)
  
         #run through the other rooms and see if they intersect with this one
@@ -1136,8 +1183,8 @@ def make_map():
                 if not is_blocked(x, y): # if this position is not blocked (a wall)
                     grow_maze((x, y))
 
-    # TODO: connect_regions()
     remove_dead_ends()
+    place_doors()
 
     # create stairs at the center of the last room
     stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
@@ -1409,6 +1456,12 @@ def create_explosive_trap_component():
 def create_poison_trap_component():
     return Trap(is_triggered=False, trigger_function=trigger_poison_trap)
 
+#############################
+## Door Creation Functions ##
+#############################
+def create_door_component():
+    return Door(is_open=True)
+
 ################################
 ## Monster Creation Functions ##
 ################################
@@ -1599,8 +1652,8 @@ def place_objects(room):
 
     # choose random number of monsters
     # TODO: Revert this
-    num_monsters = libtcod.random_get_int(0, 0, max_monsters)
-    # num_monsters = 0
+    # num_monsters = libtcod.random_get_int(0, 0, max_monsters)
+    num_monsters = 0
 
     for i in range(num_monsters):
         # choose random spot for this monster
@@ -2010,10 +2063,16 @@ def player_move_or_attack(dx, dy):
         if object.fighter and object.x == x and object.y == y:
             target = object
             break
+        if object.door and object.x == x and object.y == y:
+            target = object
+            break
 
     # attack if target found, otherwise move
-    if target is not None: # TODO: add AND conditional to check that weapon is melee
+    if target is not None and target.fighter: # TODO: add AND conditional to check that weapon is melee
         player.fighter.attack(target)
+    elif target is not None and target.door and not target.door.is_open:
+        target.door.open()
+        fov_recompute = True
     else:
         player.move(dx, dy)
         if player.fighter.run_status == 'running':
