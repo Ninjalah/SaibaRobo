@@ -38,9 +38,12 @@ PLAYER_Z_VAL = 6
 RETICULE_Z_VAL = 99
  
 # parameters for dungeon generator (num of monsters, items, etc.)
-ROOM_MAX_SIZE = 14
-ROOM_MIN_SIZE = 6
+# NOTE: These must be odd lengths in order for the new map generator to work
+ROOM_MAX_SIZE = 15
+ROOM_MIN_SIZE = 7
 MAX_ROOMS = 99 # this was 30
+CURRENT_REGION = -1
+WINDING_PERCENTAGE = 20
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
@@ -103,6 +106,12 @@ SHOTGUN_MELEE_DAMAGE = '1d3'
 SHOTGUN_RANGE = 15
 SHOTGUN_SPREAD = 3
 
+# Sawed-off Shotgun (double shotgun)
+DOUBLE_SHOTGUN_RANGED_DAMAGE = '18d3'
+DOUBLE_SHOTGUN_MELEE_DAMAGE = '1d3'
+DOUBLE_SHOTGUN_RANGE = 8
+DOUBLE_SHOTGUN_SPREAD = 6
+
 # Sniper
 SNIPER_RANGED_DAMAGE = '3d6'
 SNIPER_MELEE_DAMAGE = '1d3'
@@ -134,13 +143,9 @@ LIMIT_FPS = 60  #60 frames-per-second maximum
 #####################
 ## Lighting Colors ##
 #####################
-# color_dark_wall = libtcod.Color(0, 0, 100)
 color_dark_wall = libtcod.darkest_han
-# color_light_wall = libtcod.Color(130, 110, 50)
 color_light_wall = libtcod.dark_sepia
-#color_dark_ground = libtcod.Color(50, 50, 150)
 color_dark_ground = libtcod.darker_han
-#color_light_ground = libtcod.Color(200, 180, 50)
 color_light_ground = libtcod.sepia
 
 ###################
@@ -156,6 +161,7 @@ TERMINATRON_COLOR = libtcod.dark_red
 STAIRS_COLOR = libtcod.white
 PISTOL_COLOR = libtcod.white
 SHOTGUN_COLOR = libtcod.light_grey
+DOUBLE_SHOTGUN_COLOR = libtcod.blue
 SNIPER_COLOR = libtcod.darker_green
 DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
@@ -218,7 +224,7 @@ class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
     # TODO: Remove max_capacity from game? Currently no purpose.
-    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, canister=None, trap=None, z=0):
+    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, canister=None, trap=None, door=None, z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -244,6 +250,10 @@ class Object:
         self.trap = trap
         if self.trap: # let the Trap component know who owns it
             self.trap.owner = self
+
+        self.door = door
+        if self.door: # let the Door component know who owns it
+            self.door.owner = self
 
         self.canister = canister
         if self.canister: # let the Canister component know who owns it
@@ -606,7 +616,7 @@ class CyborgAI:
                                 libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                                 libtcod.console_flush()
                                 sleep(PROJECTILE_SLEEP_TIME)
-                                obj = get_object_by_tile(x, y)
+                                obj = get_fighter_by_tile(x, y)
                                 if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=monster.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                                     #if libtcod.map_is_in_fov(fov_map, x, y):
                                     libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
@@ -872,6 +882,30 @@ class Trap:
         else:
             self.trigger_function(self.owner.x, self.owner.y)
 
+# a door object that opens when the player 'bumps' into it, if unlocked
+class Door:
+    def __init__(self, is_open=False, is_locked=False):
+        self.is_open = is_open
+        self.is_locked = is_locked
+    
+    def open(self):
+        global map
+        print('Attempting to open door...')
+        if not self.is_open and not self.is_locked:
+            self.is_open = True
+            self.owner.char = '/'
+            self.owner.blocks = False
+            carve((self.owner.x, self.owner.y))
+    
+    def close(self):
+        global map
+        print('Attempting to close door...')
+        if self.is_open and not self.is_locked:
+            self.is_open = False
+            self.owner.char = '+'
+            self.owner.blocks = True
+            uncarve((self.owner.x, self.owner.y))
+
 ########################
 # FUNCTION DEFINITIONS #
 ########################
@@ -936,13 +970,31 @@ def point_to_point_vector(start_x, start_y, end_x, end_y):
 def get_dist_between_points(x1, y1, x2, y2):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
+# 'carves' a portion of the map
+def carve((x, y)):
+    global map
+    map[x][y].blocked = False
+    map[x][y].block_sight = False
+
+# 'uncarves' a portion of the map
+def uncarve((x, y)):
+    global map
+    map[x][y].blocked = True
+    map[x][y].block_sight = True
+
+# returns true if pos is carvable in some direction, false if not
+def can_carve((x, y), (dx, dy)):
+    if y + dy * 3 < MAP_HEIGHT and y + dy * 3 > 0:
+        if x + dx * 3 < MAP_WIDTH and x + dx * 3 > 0:
+            return is_blocked(x + dx * 2, y + dy * 2)
+    return False
+
 def create_room(room):
     global map
     #go through the tiles in the rectangle and make them passable
     for x in range(room.x1 + 1, room.x2):
         for y in range(room.y1 + 1, room.y2):
-            map[x][y].blocked = False
-            map[x][y].block_sight = False
+            carve((x, y))
  
 def create_h_tunnel(x1, x2, y):
     global map
@@ -958,8 +1010,113 @@ def create_v_tunnel(y1, y2, x):
         map[x][y].blocked = False
         map[x][y].block_sight = False
  
+# generate a maze
+def grow_maze((x, y)):
+    global CURRENT_REGION, WINDING_PERCENTAGE
+
+    cells = []
+    cardinal_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    last_direction = None
+
+    start_region()
+    carve((x, y))
+    cells.append((x, y))
+    while cells:
+        cell = cells.pop()
+
+        # see which adjacent cells are open
+        unmade_cells = []
+        for direction in cardinal_directions:
+            if can_carve(cell, direction):
+                unmade_cells.append(direction)
+
+        if unmade_cells:
+            direction = None
+            # based on "windy" passages are, try to prefer carving in the same direction
+            if last_direction in unmade_cells and libtcod.random_get_int(0, 0, 100) > WINDING_PERCENTAGE:
+                direction = last_direction
+            else:
+                random.shuffle(unmade_cells)
+                direction = unmade_cells[len(unmade_cells) - 1]
+
+            (cx, cy) = cell
+            (dx, dy) = direction
+            carve((cx+dx, cy+dy))
+            carve((cx+dx*2, cy+dy*2))
+
+            cells.append((cx+dx*2, cy+dy*2))
+            last_direction = direction
+        else:
+            if cells:
+                # no adjacent uncarved cells
+                cells.pop()
+
+            # this path is ended
+            last_direction = None
+
+# increment region counter
+def start_region():
+    global CURRENT_REGION
+
+    CURRENT_REGION += 1
+
+# remove the dead-ends from the map
+def remove_dead_ends():
+    global map
+
+    cardinal_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    done = False
+
+    while not done:
+        done = True
+        for y in range(MAP_HEIGHT):
+            for x in range(MAP_WIDTH):
+                if not is_blocked(x, y):
+                    exits = 0
+                    for direction in cardinal_directions:
+                        (dx, dy) = direction
+                        if x + dx < MAP_WIDTH and x + dx > 0 and y + dy < MAP_HEIGHT and y + dy > 0:
+                            if not is_blocked(x + dx, y + dy):
+                                exits += 1
+                    
+                    if exits == 1:
+                        done = False
+                        uncarve((x, y))
+
+# TODO: Finish this function
+# place doors
+# 1) iterate through the map, (x, y) 
+# 2) if (x, y) is in rooms list, continue
+# 3) pick a cardinal direction (from all directions), if the next tile is also open but have two opposing walls, place a door
+def place_doors():
+    global map, rooms, objects, fov_recompute
+
+    x_cardinal_directions = [(-1, 0), (1, 0)]
+    y_cardinal_directions = [(0, -1), (0, 1)]
+
+    for y in range(MAP_HEIGHT):
+        for x in range(MAP_WIDTH):
+            r = Rect(x, y, 1, 1)
+            for room in rooms:
+                if r.intersect(room):
+                    for (dx, dy) in x_cardinal_directions:
+                        r2 = Rect(x+dx, y+dy, 1, 1)
+                        if not is_blocked(x, y) and (x + dx) < MAP_WIDTH and (x + dx) > 0 and not is_blocked(x+dx, y+dy) and (x + dx * 2) < MAP_WIDTH and (x + dx * 2) > 0 and not is_blocked(x+dx*2, y+dy*2) and not r2.intersect(room):
+                            door_component = create_door_component()
+                            door = Object(x, y, '+', 'Door', libtcod.white, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                            door.door.close()
+                            objects.append(door)
+
 def make_map():
-    global map, objects, stairs
+    global map, objects, stairs, rooms
+    global CURRENT_REGION, WINDING_PERCENTAGE
+
+    # inverse chance of adding a connector between two regions that are already joined.
+    # The higher this is, the more loosely connected the rooms
+    extraConnectorChance = 20
+
+    # index of the current region being carved
+    CURRENT_REGION = -1
 
     #the list of objects with those two
     objects = [player]
@@ -972,14 +1129,22 @@ def make_map():
     rooms = []
     num_rooms = 0
  
+    # 1) Fill the map with randomly sized and located rooms
     for r in range(MAX_ROOMS):
+        w = 0
+        h = 0
         #random width and height
-        w = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
-        h = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
+        w = libtcod.random_get_int(0, ROOM_MIN_SIZE/2, ROOM_MAX_SIZE/2)
+        h = libtcod.random_get_int(0, ROOM_MIN_SIZE/2, ROOM_MAX_SIZE/2)
+        w = w * 2 + 1
+        h = h * 2 + 1
+
         #random position without going out of the boundaries of the map
-        x = libtcod.random_get_int(0, 0, MAP_WIDTH - w - 1)
-        y = libtcod.random_get_int(0, 0, MAP_HEIGHT - h - 1)
- 
+        x = libtcod.random_get_int(0, 0, (MAP_WIDTH - w)/2 - 1)
+        y = libtcod.random_get_int(0, 0, (MAP_HEIGHT - h)/2 - 1)
+        x = x * 2 + 1
+        y = y * 2 + 1
+
         #"Rect" class makes rectangles easier to work with
         new_room = Rect(x, y, w, h)
  
@@ -1003,22 +1168,6 @@ def make_map():
                 #this is the first room, where the player starts at
                 player.x = new_x
                 player.y = new_y
-            else:
-                #all rooms after the first:
-                #connect it to the previous room with a tunnel
- 
-                #center coordinates of previous room
-                (prev_x, prev_y) = rooms[num_rooms-1].center()
- 
-                #draw a coin (random number that is either 0 or 1)
-                if libtcod.random_get_int(0, 0, 1) == 1:
-                    #first move horizontally, then vertically
-                    create_h_tunnel(prev_x, new_x, prev_y)
-                    create_v_tunnel(prev_y, new_y, new_x)
-                else:
-                    #first move vertically, then horizontally
-                    create_v_tunnel(prev_y, new_y, prev_x)
-                    create_h_tunnel(prev_x, new_x, new_y)
 
             # add some contents to this room, such as monsters
             place_objects(new_room)
@@ -1026,6 +1175,16 @@ def make_map():
             #finally, append the new room to the list
             rooms.append(new_room)
             num_rooms += 1
+
+    # After rooms are generated, fill in empty space with mazes
+    for y in range (MAP_HEIGHT):
+        for x in range (MAP_WIDTH):
+            if x % 2 == 1 and y % 2 == 1: # if the maze start location is odd
+                if not is_blocked(x, y): # if this position is not blocked (a wall)
+                    grow_maze((x, y))
+
+    remove_dead_ends()
+    place_doors()
 
     # create stairs at the center of the last room
     stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
@@ -1244,13 +1403,17 @@ def create_pistol_equipment():
 def create_shotgun_equipment():
     return Equipment(slot='weapon', ammo=1, is_ranged=True, range=SHOTGUN_RANGE, spread=SHOTGUN_SPREAD, shoot_function=cast_shoot_shotgun, melee_damage=SHOTGUN_MELEE_DAMAGE, ranged_damage=SHOTGUN_RANGED_DAMAGE)
 
+# Create and return a double shotgun component
+def create_double_shotgun_equipment():
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, range=DOUBLE_SHOTGUN_RANGE, spread=DOUBLE_SHOTGUN_SPREAD, shoot_function=cast_shoot_double_shotgun, melee_damage=DOUBLE_SHOTGUN_MELEE_DAMAGE, ranged_damage=DOUBLE_SHOTGUN_RANGED_DAMAGE)
+
 # Create and return a dagger component
 def create_dagger_equipment():
     return Equipment(slot='weapon', is_ranged=False, melee_damage=DAGGER_DAMAGE, accuracy_bonus=DAGGER_ACCURACY_BONUS)
 
 # Create and return a sniper component
 def create_sniper_equipment():
-    return Equipment(slot='weapon', ammo=1, is_ranged=True, shoot_function=cast_shoot_pistol, melee_damage=SNIPER_MELEE_DAMAGE, ranged_damage=SNIPER_RANGED_DAMAGE, accuracy_bonus=SNIPER_ACCURACY_BONUS)
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, shoot_function=cast_shoot_sniper, melee_damage=SNIPER_MELEE_DAMAGE, ranged_damage=SNIPER_RANGED_DAMAGE, accuracy_bonus=SNIPER_ACCURACY_BONUS)
 
 #############################
 ## Item Creation Functions ##
@@ -1292,6 +1455,12 @@ def create_explosive_trap_component():
 
 def create_poison_trap_component():
     return Trap(is_triggered=False, trigger_function=trigger_poison_trap)
+
+#############################
+## Door Creation Functions ##
+#############################
+def create_door_component():
+    return Door(is_open=True)
 
 ################################
 ## Monster Creation Functions ##
@@ -1419,7 +1588,7 @@ def place_objects(room):
     # max number of monsters per room
     max_monsters = from_dungeon_level([[2, 1], [5, 3], [7, 5]])
 
-    # chance of each mosnter
+    # chance of each monster
     monster_chances = {}
     monster_chances['cyborg'] = 70
     monster_chances['mecharachnid'] = from_dungeon_level([[29, 1], [25, 3], [50, 5]])
@@ -1430,21 +1599,22 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
-    item_chances['scanner'] = from_dungeon_level([[15, 1]])
+    item_chances['scanner'] = from_dungeon_level([[5, 1]])
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
-    item_chances['dagger'] = from_dungeon_level([[15, 1]])
-    item_chances['pistol'] = from_dungeon_level([[5, 1]])
-    item_chances['shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['dagger'] = from_dungeon_level([[10, 1]])
+    item_chances['pistol'] = from_dungeon_level([[10, 1]])
+    item_chances['shotgun'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['double_shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
     item_chances['sniper'] = from_dungeon_level([[5, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
     item_chances['shell'] = from_dungeon_level([[20, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['50cal ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['health_canister'] = from_dungeon_level([[25, 1]])
+    item_chances['50cal ammo'] = from_dungeon_level([[10, 1]])
+    item_chances['health_canister'] = from_dungeon_level([[15, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
     item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['antidote_canister'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['antidote_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1481,7 +1651,9 @@ def place_objects(room):
                     objects.append(trap)
 
     # choose random number of monsters
+    # TODO: Revert this
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
+    # num_monsters = 0
 
     for i in range(num_monsters):
         # choose random spot for this monster
@@ -1550,6 +1722,10 @@ def place_objects(room):
                 # create a shotgun
                 equipment_component = create_shotgun_equipment()
                 item = Object(x, y, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'double_shotgun':
+                # create a double shotgun
+                equipment_component = create_double_shotgun_equipment()
+                item = Object(x, y, '}', 'Sawed-off Shotgun', DOUBLE_SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
@@ -1887,10 +2063,16 @@ def player_move_or_attack(dx, dy):
         if object.fighter and object.x == x and object.y == y:
             target = object
             break
+        if object.door and object.x == x and object.y == y:
+            target = object
+            break
 
     # attack if target found, otherwise move
-    if target is not None: # TODO: add AND conditional to check that weapon is melee
+    if target is not None and target.fighter: # TODO: add AND conditional to check that weapon is melee
         player.fighter.attack(target)
+    elif target is not None and target.door and not target.door.is_open:
+        target.door.open()
+        fov_recompute = True
     else:
         player.move(dx, dy)
         if player.fighter.run_status == 'running':
@@ -2318,7 +2500,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
-                    obj = get_object_by_tile(x, y)
+                    obj = get_fighter_by_tile(x, y)
                     if is_blocked(x, y) and obj is not None and obj.fighter is not None and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
@@ -2456,9 +2638,87 @@ def cast_shoot_shotgun(dx, dy, weapon):
                 # libtcod.console_flush()
                 f = get_fighter_by_tile(x, y)
                 if f is not None: # fighter found at tile (x, y)
-                    print('Before reduc: ' + str(totalDamage))
-                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.07))
                     new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.07)))
+                    if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
+                        new_dmg = 1
+                    message(f.name + ' takes ' + str(new_dmg) + ' damage!', libtcod.orange)
+                    f.fighter.take_damage(new_dmg)
+
+        else:
+            message('Your ' + weapon.owner.name + ' is empty!', libtcod.red)
+            return 'cancelled'
+
+# shoot double shotgun at tile (dx, dy)
+def cast_shoot_double_shotgun(dx, dy, weapon):
+    if weapon != None and weapon.is_ranged:
+        if dx is None: return 'cancelled'
+
+        if weapon.ammo > 0:
+            totalDamage = roll_dice(player.fighter.ranged_damage)
+            weapon.ammo -= 1
+
+            # AoE/cone effect calculation
+            # get a vector of SHOTGUN_MAX_RANGE parallel to the reticule position
+            # slope between player and reticule
+            m_x = dx - player.x
+            m_y = dy - player.y
+
+            while get_dist_between_points(player.x, player.y, dx, dy) < weapon.max_range:
+                dx += m_x
+                dy += m_y
+
+            # draw a square of (2 * SHOTGUN_SPREAD + 1) around this tile
+            length = (2 * weapon.spread) + 1
+
+            line_tiles = []
+            # for each tile here, add to list of tiles to draw lines to
+            for y in range(-MAP_HEIGHT, MAP_HEIGHT+weapon.max_range):
+                for x in range(-MAP_WIDTH, MAP_WIDTH+weapon.max_range):
+                    if x >= (dx - length/2) and x <= (dx + length/2) and y >= (dy - length/2) and y <= (dy + length/2):
+                        line_tiles.append((x, y))
+            
+            hit_tiles = []
+            puff_tiles = []
+            libtcod.console_set_default_foreground(con, libtcod.red)
+            # for each line_tile, draw a line to it (until hits a wall)
+            for x, y in line_tiles:
+                wall_found = False
+                libtcod.line_init(player.x, player.y, x, y)
+                x2, y2 = libtcod.line_step()
+                while wall_found is False and x2 is not None:
+                    obj = get_fighter_by_tile(x2, y2)
+                    if (x2, y2) not in hit_tiles:
+                        if is_blocked(x2, y2) and obj is not None: # HITS A FIGHTER
+                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                            # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            # libtcod.console_flush()
+                            if (x2, y2) not in hit_tiles:
+                                hit_tiles.append((x2, y2))
+                                puff_tiles.append((x2, y2))
+                        elif is_blocked(x2, y2) and obj is None: # HITS A WALL
+                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                            wall_found = True
+                            if (x2, y2) not in puff_tiles:
+                                puff_tiles.append((x2, y2))
+                            break
+                        else: # HITS NOTHING
+                            if (x2, y2) not in hit_tiles:
+                                hit_tiles.append((x2, y2))
+                    x2, y2 = libtcod.line_step()
+            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+            libtcod.console_flush()
+            sleep(0.1)
+            for x, y in puff_tiles:
+                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+            render_all()
+
+            # if a tile has a drawn line through it, apply damage (with dmg reduction = 7% * distance)
+            for x, y in hit_tiles:
+                f = get_fighter_by_tile(x, y)
+                if f is not None: # fighter found at tile (x, y)
+                    print('Before reduc: ' + str(totalDamage))
+                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.10))
+                    new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.10)))
                     print('After reduc: ' + str(new_dmg))
                     if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
                         new_dmg = 1
@@ -2523,7 +2783,7 @@ def cast_shoot_sniper(dx, dy, weapon):
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
-                    obj = get_object_by_tile(x, y)
+                    obj = get_fighter_by_tile(x, y)
                     if is_blocked(x, y) and obj is not None and obj.fighter is not None and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
@@ -2590,7 +2850,7 @@ def cast_shoot_item(dx, dy, item):
 def get_ammo_type(shoot_function):
     if shoot_function is cast_shoot_pistol:
         return '10mm ammo'
-    elif shoot_function is cast_shoot_shotgun:
+    elif shoot_function is cast_shoot_shotgun or shoot_function is cast_shoot_double_shotgun:
         return 'shell'
     elif shoot_function is cast_shoot_sniper:
         return '50cal ammo'
@@ -3021,6 +3281,7 @@ def new_game():
     global IS_HEALTH_CANISTER_IDENTIFIED, IS_STRENGTH_CANISTER_IDENTIFIED, IS_POISON_CANISTER_IDENTIFIED, IS_ANTIDOTE_CANISTER_IDENTIFIED
     global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
     global color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
+    global CURRENT_REGION
 
     color_dark_wall = libtcod.darkest_han
     color_light_wall = libtcod.dark_sepia
@@ -3070,6 +3331,7 @@ def new_game():
     PLAYER_HP_BACKGROUND = libtcod.darker_red
 
     #generate map (at this point it's not drawn to the screen)
+    CURRENT_REGION = -1
     make_map()
 
     # initialize fov map
