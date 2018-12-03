@@ -38,9 +38,12 @@ PLAYER_Z_VAL = 6
 RETICULE_Z_VAL = 99
  
 # parameters for dungeon generator (num of monsters, items, etc.)
-ROOM_MAX_SIZE = 14
-ROOM_MIN_SIZE = 6
+# NOTE: These must be odd lengths in order for the new map generator to work
+ROOM_MAX_SIZE = 15
+ROOM_MIN_SIZE = 7
 MAX_ROOMS = 99 # this was 30
+CURRENT_REGION = -1
+WINDING_PERCENTAGE = 20
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
@@ -939,13 +942,31 @@ def point_to_point_vector(start_x, start_y, end_x, end_y):
 def get_dist_between_points(x1, y1, x2, y2):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
+# 'carves' a portion of the map
+def carve((x, y)):
+    global map
+    map[x][y].blocked = False
+    map[x][y].block_sight = False
+
+# 'uncarves' a portion of the map
+def uncarve((x, y)):
+    global map
+    map[x][y].blocked = True
+    map[x][y].block_sight = True
+
+# returns true if pos is carvable in some direction, false if not
+def can_carve((x, y), (dx, dy)):
+    if y + dy * 3 < MAP_HEIGHT and y + dy * 3 > 0:
+        if x + dx * 3 < MAP_WIDTH and x + dx * 3 > 0:
+            return is_blocked(x + dx * 2, y + dy * 2)
+    return False
+
 def create_room(room):
     global map
     #go through the tiles in the rectangle and make them passable
     for x in range(room.x1 + 1, room.x2):
         for y in range(room.y1 + 1, room.y2):
-            map[x][y].blocked = False
-            map[x][y].block_sight = False
+            carve((x, y))
  
 def create_h_tunnel(x1, x2, y):
     global map
@@ -961,8 +982,93 @@ def create_v_tunnel(y1, y2, x):
         map[x][y].blocked = False
         map[x][y].block_sight = False
  
+# generate a maze
+def grow_maze((x, y)):
+    global CURRENT_REGION, WINDING_PERCENTAGE
+
+    cells = []
+    cardinal_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    last_direction = None
+
+    start_region()
+    carve((x, y))
+    cells.append((x, y))
+    while cells:
+        cell = cells.pop()
+
+        # see which adjacent cells are open
+        unmade_cells = []
+        for direction in cardinal_directions:
+            if can_carve(cell, direction):
+                unmade_cells.append(direction)
+
+        if unmade_cells:
+            direction = None
+            # based on "windy" passages are, try to prefer carving in the same direction
+            if last_direction in unmade_cells and libtcod.random_get_int(0, 0, 100) > WINDING_PERCENTAGE:
+                direction = last_direction
+            else:
+                random.shuffle(unmade_cells)
+                direction = unmade_cells[len(unmade_cells) - 1]
+
+            (cx, cy) = cell
+            (dx, dy) = direction
+            carve((cx+dx, cy+dy))
+            carve((cx+dx*2, cy+dy*2))
+
+            cells.append((cx+dx*2, cy+dy*2))
+            last_direction = direction
+        else:
+            if cells:
+                # no adjacent uncarved cells
+                cells.pop()
+
+            # this path is ended
+            last_direction = None
+
+# increment region counter
+def start_region():
+    global CURRENT_REGION
+
+    CURRENT_REGION += 1
+
+# remove the dead-ends from the map
+def remove_dead_ends():
+    global map
+
+    cardinal_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    done = False
+    p = 0
+
+    while not done:
+        done = True
+        p += 1
+        print('Pass: ' + str(p))
+        if p < 1000:
+            for y in range(MAP_HEIGHT):
+                for x in range(MAP_WIDTH):
+                    if not is_blocked(x, y):
+                        exits = 0
+                        for direction in cardinal_directions:
+                            (dx, dy) = direction
+                            if x + dx < MAP_WIDTH and x + dx > 0 and y + dy < MAP_HEIGHT and y + dy > 0:
+                                if not is_blocked(x + dx, y + dy):
+                                    exits += 1
+                        
+                        if exits == 1:
+                            done = False
+                            uncarve((x, y))
+
 def make_map():
     global map, objects, stairs
+    global CURRENT_REGION, WINDING_PERCENTAGE
+
+    # inverse chance of adding a connector between two regions that are already joined.
+    # The higher this is, the more loosely connected the rooms
+    extraConnectorChance = 20
+
+    # index of the current region being carved
+    CURRENT_REGION = -1
 
     #the list of objects with those two
     objects = [player]
@@ -975,15 +1081,24 @@ def make_map():
     rooms = []
     num_rooms = 0
  
+    # 1) Fill the map with randomly sized and located rooms
     for r in range(MAX_ROOMS):
+        w = 0
+        h = 0
         #random width and height
-        w = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
-        h = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
+        w = libtcod.random_get_int(0, ROOM_MIN_SIZE/2, ROOM_MAX_SIZE/2)
+        h = libtcod.random_get_int(0, ROOM_MIN_SIZE/2, ROOM_MAX_SIZE/2)
+        w = w * 2 + 1
+        h = h * 2 + 1
+
         #random position without going out of the boundaries of the map
-        x = libtcod.random_get_int(0, 0, MAP_WIDTH - w - 1)
-        y = libtcod.random_get_int(0, 0, MAP_HEIGHT - h - 1)
- 
+        x = libtcod.random_get_int(0, 0, (MAP_WIDTH - w)/2 - 1)
+        y = libtcod.random_get_int(0, 0, (MAP_HEIGHT - h)/2 - 1)
+        x = x * 2 + 1
+        y = y * 2 + 1
+
         #"Rect" class makes rectangles easier to work with
+        print('w, h, x, y: ' + str(w) + ', ' + str(h) + ', ' + str(x) + ', ' + str(y))
         new_room = Rect(x, y, w, h)
  
         #run through the other rooms and see if they intersect with this one
@@ -1006,22 +1121,6 @@ def make_map():
                 #this is the first room, where the player starts at
                 player.x = new_x
                 player.y = new_y
-            else:
-                #all rooms after the first:
-                #connect it to the previous room with a tunnel
- 
-                #center coordinates of previous room
-                (prev_x, prev_y) = rooms[num_rooms-1].center()
- 
-                #draw a coin (random number that is either 0 or 1)
-                if libtcod.random_get_int(0, 0, 1) == 1:
-                    #first move horizontally, then vertically
-                    create_h_tunnel(prev_x, new_x, prev_y)
-                    create_v_tunnel(prev_y, new_y, new_x)
-                else:
-                    #first move vertically, then horizontally
-                    create_v_tunnel(prev_y, new_y, prev_x)
-                    create_h_tunnel(prev_x, new_x, new_y)
 
             # add some contents to this room, such as monsters
             place_objects(new_room)
@@ -1029,6 +1128,16 @@ def make_map():
             #finally, append the new room to the list
             rooms.append(new_room)
             num_rooms += 1
+
+    # After rooms are generated, fill in empty space with mazes
+    for y in range (MAP_HEIGHT):
+        for x in range (MAP_WIDTH):
+            if x % 2 == 1 and y % 2 == 1: # if the maze start location is odd
+                if not is_blocked(x, y): # if this position is not blocked (a wall)
+                    grow_maze((x, y))
+
+    # TODO: connect_regions()
+    remove_dead_ends()
 
     # create stairs at the center of the last room
     stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
@@ -1257,7 +1366,7 @@ def create_dagger_equipment():
 
 # Create and return a sniper component
 def create_sniper_equipment():
-    return Equipment(slot='weapon', ammo=1, is_ranged=True, shoot_function=cast_shoot_pistol, melee_damage=SNIPER_MELEE_DAMAGE, ranged_damage=SNIPER_RANGED_DAMAGE, accuracy_bonus=SNIPER_ACCURACY_BONUS)
+    return Equipment(slot='weapon', ammo=1, is_ranged=True, shoot_function=cast_shoot_sniper, melee_damage=SNIPER_MELEE_DAMAGE, ranged_damage=SNIPER_RANGED_DAMAGE, accuracy_bonus=SNIPER_ACCURACY_BONUS)
 
 #############################
 ## Item Creation Functions ##
@@ -1426,7 +1535,7 @@ def place_objects(room):
     # max number of monsters per room
     max_monsters = from_dungeon_level([[2, 1], [5, 3], [7, 5]])
 
-    # chance of each mosnter
+    # chance of each monster
     monster_chances = {}
     monster_chances['cyborg'] = 70
     monster_chances['mecharachnid'] = from_dungeon_level([[29, 1], [25, 3], [50, 5]])
@@ -1448,7 +1557,7 @@ def place_objects(room):
     item_chances['sniper'] = from_dungeon_level([[5, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
     item_chances['shell'] = from_dungeon_level([[20, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['50cal ammo'] = from_dungeon_level([[20, 1]])
+    item_chances['50cal ammo'] = from_dungeon_level([[10, 1]])
     item_chances['health_canister'] = from_dungeon_level([[15, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
     item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
@@ -1489,7 +1598,9 @@ def place_objects(room):
                     objects.append(trap)
 
     # choose random number of monsters
+    # TODO: Revert this
     num_monsters = libtcod.random_get_int(0, 0, max_monsters)
+    # num_monsters = 0
 
     for i in range(num_monsters):
         # choose random spot for this monster
@@ -2547,8 +2658,8 @@ def cast_shoot_double_shotgun(dx, dy, weapon):
                 f = get_fighter_by_tile(x, y)
                 if f is not None: # fighter found at tile (x, y)
                     print('Before reduc: ' + str(totalDamage))
-                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.15))
-                    new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.15)))
+                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.10))
+                    new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.10)))
                     print('After reduc: ' + str(new_dmg))
                     if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
                         new_dmg = 1
@@ -3111,6 +3222,7 @@ def new_game():
     global IS_HEALTH_CANISTER_IDENTIFIED, IS_STRENGTH_CANISTER_IDENTIFIED, IS_POISON_CANISTER_IDENTIFIED, IS_ANTIDOTE_CANISTER_IDENTIFIED
     global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
     global color_dark_wall, color_dark_ground, color_light_wall, color_light_ground
+    global CURRENT_REGION
 
     color_dark_wall = libtcod.darkest_han
     color_light_wall = libtcod.dark_sepia
@@ -3160,6 +3272,7 @@ def new_game():
     PLAYER_HP_BACKGROUND = libtcod.darker_red
 
     #generate map (at this point it's not drawn to the screen)
+    CURRENT_REGION = -1
     make_map()
 
     # initialize fov map
