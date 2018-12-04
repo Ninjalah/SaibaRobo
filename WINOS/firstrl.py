@@ -890,7 +890,6 @@ class Door:
         self.is_locked = is_locked
     
     def open(self):
-        print('Attempting to open door...')
         if not self.is_open and not self.is_locked:
             self.is_open = True
             self.owner.char = '/'
@@ -902,7 +901,6 @@ class Door:
                         libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
     
     def close(self):
-        print('Attempting to close door...')
         if self.is_open and not self.is_locked:
             self.is_open = False
             self.owner.char = '+'
@@ -1661,7 +1659,6 @@ def place_objects(room):
                     trap = Object(x, y, ' ', 'Poison Trap', libtcod.dark_green, blocks=False, trap=trap_component, always_visible=True, z=TRAP_Z_VAL)
 
                 if trap is not None:
-                    print('Adding trap...')
                     objects.append(trap)
 
     # choose random number of monsters
@@ -2730,10 +2727,7 @@ def cast_shoot_double_shotgun(dx, dy, weapon):
             for x, y in hit_tiles:
                 f = get_fighter_by_tile(x, y)
                 if f is not None: # fighter found at tile (x, y)
-                    print('Before reduc: ' + str(totalDamage))
-                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.10))
                     new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.10)))
-                    print('After reduc: ' + str(new_dmg))
                     if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
                         new_dmg = 1
                     message(f.name + ' takes ' + str(new_dmg) + ' damage!', libtcod.orange)
@@ -2883,7 +2877,6 @@ def can_reload_weapon(ammo_type):
 # reloads the weapon passed into it
 def cast_reload_weapon(ammo_type, weapon):
     amount_to_reload = weapon.max_ammo - weapon.ammo
-    print('Amount_to_reload: ' + str(amount_to_reload))
     if ammo_type in '10mm ammo': # 10mm using weapons
         if amount_to_reload > player.fighter.ten_mm_rounds: #can reload some, not all
             weapon.ammo += player.fighter.ten_mm_rounds
@@ -2914,7 +2907,6 @@ def cast_reload():
 
     if weapon is not None and weapon.is_ranged: # if this is a ranged weapon
         ammo_type = get_ammo_type(weapon.shoot_function) # get weapon type
-        print('Ammo_type: ' + ammo_type)
         if weapon.ammo >= weapon.max_ammo: # already at full ammo!
                 message(weapon.owner.name + ' is already full of ammo!', libtcod.red)
                 return 'cancelled'
@@ -2992,7 +2984,6 @@ def msgbox(text, width=50):
 # finds an object in inventory, retrieves it
 def find_in_inventory(obj_str):
     for item in inventory:
-        print('Item: ' + item.name)
         if item.name == obj_str:
             return item
     
@@ -3123,7 +3114,6 @@ def handle_keys():
                     else:
                         return 'didnt-take-turn'
                 elif is_aiming_item is True: # if you are aiming an item
-                    print('Item is ' + str(item))
                     if item is not None and cast_shoot_item(reticule.x, reticule.y, item) is not 'cancelled':
                         player.fighter.has_moved_this_turn = False
                         return 'turn-taken'
@@ -3217,7 +3207,6 @@ def handle_keys():
 
             if key_char == 'c':
                 # show character stats
-                print('Player.fighter: ' + str(player.fighter))
                 LEVEL_UP_XP = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
                 msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
                     '\nExperience to level up: ' + str(LEVEL_UP_XP) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
