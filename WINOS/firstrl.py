@@ -167,6 +167,7 @@ DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
 SHELLS_COLOR = libtcod.light_grey
 FIFTYCAL_AMMO_COLOR = libtcod.darker_green
+DOOR_COLOR = libtcod.lighter_sepia
 
 #################
 ## Shot Colors ##
@@ -889,22 +890,28 @@ class Door:
         self.is_locked = is_locked
     
     def open(self):
-        global map
         print('Attempting to open door...')
         if not self.is_open and not self.is_locked:
             self.is_open = True
             self.owner.char = '/'
             self.owner.blocks = False
             carve((self.owner.x, self.owner.y))
+            if 'fov_map' in globals():
+                for y in range(MAP_HEIGHT):
+                    for x in range(MAP_WIDTH):
+                        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
     
     def close(self):
-        global map
         print('Attempting to close door...')
         if self.is_open and not self.is_locked:
             self.is_open = False
             self.owner.char = '+'
             self.owner.blocks = True
             uncarve((self.owner.x, self.owner.y))
+            if 'fov_map' in globals():
+                for y in range(MAP_HEIGHT):
+                    for x in range(MAP_WIDTH):
+                        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
 
 ########################
 # FUNCTION DEFINITIONS #
@@ -1101,9 +1108,16 @@ def place_doors():
                 if r.intersect(room):
                     for (dx, dy) in x_cardinal_directions:
                         r2 = Rect(x+dx, y+dy, 1, 1)
-                        if not is_blocked(x, y) and (x + dx) < MAP_WIDTH and (x + dx) > 0 and not is_blocked(x+dx, y+dy) and (x + dx * 2) < MAP_WIDTH and (x + dx * 2) > 0 and not is_blocked(x+dx*2, y+dy*2) and not r2.intersect(room):
+                        if not is_blocked(x, y) and (x + dx) < MAP_WIDTH and (x + dx) > 0 and not is_blocked(x+dx, y) and (x + dx * 2) < MAP_WIDTH and (x + dx * 2) > 0 and not is_blocked(x+dx*2, y) and not r2.intersect(room):
                             door_component = create_door_component()
-                            door = Object(x, y, '+', 'Door', libtcod.white, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                            door = Object(x, y, '+', 'Door', DOOR_COLOR, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                            door.door.close()
+                            objects.append(door)
+                    for (dx, dy) in y_cardinal_directions:
+                        r2 = Rect(x+dx, y+dy, 1, 1)
+                        if not is_blocked(x, y) and (y + dy) < MAP_HEIGHT and (y + dy) > 0 and not is_blocked(x, y+dy) and (y + dy * 2) < MAP_HEIGHT and (y + dy * 2) > 0 and not is_blocked(x, y+dy*2) and not r2.intersect(room):
+                            door_component = create_door_component()
+                            door = Object(x, y, '+', 'Door', DOOR_COLOR, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
                             door.door.close()
                             objects.append(door)
 
@@ -3276,7 +3290,7 @@ def load_game():
 
 # START A NEW GAME
 def new_game():
-    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
+    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects, fov_map
     global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR, POISON_CANISTER_COLOR, ANTIDOTE_CANISTER_COLOR
     global IS_HEALTH_CANISTER_IDENTIFIED, IS_STRENGTH_CANISTER_IDENTIFIED, IS_POISON_CANISTER_IDENTIFIED, IS_ANTIDOTE_CANISTER_IDENTIFIED
     global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
@@ -3482,8 +3496,8 @@ def main_menu():
         elif choice == 2: # quit
             break
 
-# libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+# libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 #libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
