@@ -276,7 +276,7 @@ class Object:
     def move(self, dx, dy):
         #move by the given amount, if the destination is not blocked
         if not is_blocked(self.x + dx, self.y + dy):
-            # self.clear()
+            self.clear()
             if self.fighter is not None:
                 self.fighter.has_moved_this_turn = True
                 if (float(self.fighter.hp) / self.fighter.base_max_hp) <= 0.2:
@@ -616,7 +616,7 @@ class CyborgAI:
                                 libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                                 libtcod.console_flush()
                                 sleep(PROJECTILE_SLEEP_TIME)
-                                obj = get_object_by_tile(x, y)
+                                obj = get_fighter_by_tile(x, y)
                                 if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=monster.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                                     #if libtcod.map_is_in_fov(fov_map, x, y):
                                     libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
@@ -889,22 +889,28 @@ class Door:
         self.is_locked = is_locked
     
     def open(self):
-        global map
         print('Attempting to open door...')
         if not self.is_open and not self.is_locked:
             self.is_open = True
             self.owner.char = '/'
             self.owner.blocks = False
             carve((self.owner.x, self.owner.y))
+            if 'fov_map' in globals():
+                for y in range(MAP_HEIGHT):
+                    for x in range(MAP_WIDTH):
+                        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
     
     def close(self):
-        global map
         print('Attempting to close door...')
         if self.is_open and not self.is_locked:
             self.is_open = False
             self.owner.char = '+'
             self.owner.blocks = True
             uncarve((self.owner.x, self.owner.y))
+            if 'fov_map' in globals():
+                for y in range(MAP_HEIGHT):
+                    for x in range(MAP_WIDTH):
+                        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
 
 ########################
 # FUNCTION DEFINITIONS #
@@ -1652,8 +1658,8 @@ def place_objects(room):
 
     # choose random number of monsters
     # TODO: Revert this
-    # num_monsters = libtcod.random_get_int(0, 0, max_monsters)
-    num_monsters = 0
+    num_monsters = libtcod.random_get_int(0, 0, max_monsters)
+    # num_monsters = 0
 
     for i in range(num_monsters):
         # choose random spot for this monster
@@ -2500,7 +2506,7 @@ def cast_shoot_pistol(dx, dy, weapon):
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
-                    obj = get_object_by_tile(x, y)
+                    obj = get_fighter_by_tile(x, y)
                     if is_blocked(x, y) and obj is not None and obj.fighter is not None and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
@@ -2783,7 +2789,7 @@ def cast_shoot_sniper(dx, dy, weapon):
                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                     libtcod.console_flush()
                     sleep(PROJECTILE_SLEEP_TIME)
-                    obj = get_object_by_tile(x, y)
+                    obj = get_fighter_by_tile(x, y)
                     if is_blocked(x, y) and obj is not None and obj.fighter is not None and roll_to_hit(accuracy_bonus=player.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
                         #if libtcod.map_is_in_fov(fov_map, x, y):
                         libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
@@ -3276,7 +3282,7 @@ def load_game():
 
 # START A NEW GAME
 def new_game():
-    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects
+    global player, inventory, game_msgs, game_state, dungeon_level, reticule, is_aiming_item, objects, fov_map
     global HEALTH_CANISTER_COLOR, STRENGTH_CANISTER_COLOR, POISON_CANISTER_COLOR, ANTIDOTE_CANISTER_COLOR
     global IS_HEALTH_CANISTER_IDENTIFIED, IS_STRENGTH_CANISTER_IDENTIFIED, IS_POISON_CANISTER_IDENTIFIED, IS_ANTIDOTE_CANISTER_IDENTIFIED
     global PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND
