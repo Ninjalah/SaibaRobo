@@ -87,7 +87,7 @@ IS_ANTIDOTE_CANISTER_IDENTIFIED = False
 #########################
 ## List of weapons that use ammo ##
 TENMM_WEAPONS = ['Pistol']
-SHELL_WEAPONS = ['Shotgun']
+SHELL_WEAPONS = ['Shotgun', 'Double Shotgun']
 FIFTYCAL_WEAPONS = ['Sniper']
 
 PROJECTILE_SLEEP_TIME = 0.01
@@ -114,7 +114,7 @@ DOUBLE_SHOTGUN_RANGE = 8
 DOUBLE_SHOTGUN_SPREAD = 6
 
 # Sniper
-SNIPER_RANGED_DAMAGE = '3d6'
+SNIPER_RANGED_DAMAGE = '6d3'
 SNIPER_MELEE_DAMAGE = '1d3'
 SNIPER_ACCURACY_BONUS = 4
 
@@ -133,7 +133,12 @@ TERMINATRON_MELEE_DAMAGE = '2d6'
 MECHARACHNID_MELEE_DAMAGE = '2d6'
 
 # CYBORG
-CYBORG_RANGED_DAMAGE = '2d4'
+CYBORG_RANGED_DAMAGE = PISTOL_RANGED_DAMAGE
+
+# RENEGADE
+RENEGADE_RANGED_DAMAGE = SHOTGUN_RANGED_DAMAGE
+RENEGADE_RANGE = SHOTGUN_RANGE
+RENEGADE_SPREAD = SHOTGUN_SPREAD
 
 FOV_ALGO = 0  #default FOV algorithm
 FOV_LIGHT_WALLS = True  #light walls or not
@@ -155,6 +160,7 @@ color_light_ground = libtcod.sepia
 ## Fighters ##
 PLAYER_COLOR = libtcod.white
 CYBORG_COLOR = libtcod.white
+RENEGADE_COLOR = libtcod.light_grey
 MECHARACHNID_COLOR = libtcod.light_grey
 TERMINATRON_COLOR = libtcod.dark_red
 
@@ -162,12 +168,12 @@ TERMINATRON_COLOR = libtcod.dark_red
 STAIRS_COLOR = libtcod.white
 PISTOL_COLOR = libtcod.white
 SHOTGUN_COLOR = libtcod.light_grey
-DOUBLE_SHOTGUN_COLOR = libtcod.blue
-SNIPER_COLOR = libtcod.darker_green
+DOUBLE_SHOTGUN_COLOR = libtcod.light_blue
+SNIPER_COLOR = libtcod.dark_green
 DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
 SHELLS_COLOR = libtcod.light_grey
-FIFTYCAL_AMMO_COLOR = libtcod.darker_green
+FIFTYCAL_AMMO_COLOR = libtcod.dark_green
 DOOR_COLOR = libtcod.lighter_sepia
 
 #################
@@ -226,7 +232,8 @@ class Object:
     #this is a generic object: the player, a monster, an item, the stairs...
     #it's always represented by a character on screen.
     # TODO: Remove max_capacity from game? Currently no purpose.
-    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None, ai=None, item=None, equipment=None, canister=None, trap=None, door=None, z=0):
+    def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None,
+        ai=None, item=None, equipment=None, canister=None, trap=None, door=None, z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -548,7 +555,7 @@ class MeleeAI:
     def take_turn(self):
         move_chance = 100
         if player.fighter.run_status == 'running':
-            move_chance -= 20
+            move_chance -= 25
         # roll to see if monster moves
         monster = self.owner
         if libtcod.random_get_int(0, 1, 100) < move_chance:
@@ -566,7 +573,7 @@ class MeleeAI:
             else: # if monster doesn't see player, move randomly
                 monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
-# AI for Cyborgs (ranged)
+# AI for Cyborgs (pistol-wielding, ranged)
 class CyborgAI:
     def take_turn(self):
         if player.fighter.hp > 0:
@@ -577,89 +584,94 @@ class CyborgAI:
                     atk_chance = libtcod.random_get_int(0, 1, 100)
 
                     if atk_chance < 75: #chance to fire weapon, 75%
-                        totalDamage = roll_dice(monster.fighter.ranged_damage)
-                        # slope between player and reticule
-                        dx = player.x
-                        dy = player.y
+                        if monster.fighter.ten_mm_rounds > 0: # if cyborg has ammo
+                            monster.fighter.ten_mm_rounds -= 1
+                            totalDamage = roll_dice(monster.fighter.ranged_damage)
+                            # slope between player and reticule
+                            dx = player.x
+                            dy = player.y
 
-                        m_x = dx - monster.x
-                        m_y = dy - monster.y
-                        # starting x and y
-                        start_x = monster.x
-                        start_y = monster.y
+                            m_x = dx - monster.x
+                            m_y = dy - monster.y
+                            # starting x and y
+                            start_x = monster.x
+                            start_y = monster.y
 
-                        # Find furthest blocking tile
-                        hasHit = False
-                        
-                        while (hasHit is False):
-                            libtcod.line_init(start_x, start_y, dx, dy)
-                            prev_x, prev_y = start_x, start_y
-                            x, y = libtcod.line_step()
-                            while (x is not None):
-                                (min, max) = get_min_max_dmg(monster.fighter.ranged_damage)
-                                if (totalDamage == max):
-                                    libtcod.console_set_default_foreground(con, SHOT_CRIT_HIGH)
-                                elif (totalDamage == min):
-                                    libtcod.console_set_default_foreground(con, SHOT_CRIT_LOW)
-                                else:
-                                    libtcod.console_set_default_foreground(con, SHOT_NORMAL)
-                                #if libtcod.map_is_in_fov(fov_map, x, y):
-                                normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
-                                if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
-                                    libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
-                                elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
-                                    libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
-                                elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
-                                    libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
-                                elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
-                                    libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
-                                else: # TODO: DEBUG: this shouldn't be reached but if so, debug
-                                    libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
-                                libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                                libtcod.console_flush()
-                                sleep(PROJECTILE_SLEEP_TIME)
-                                obj = get_fighter_by_tile(x, y)
-                                if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=monster.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
+                            # Find furthest blocking tile
+                            hasHit = False
+                            
+                            while (hasHit is False):
+                                libtcod.line_init(start_x, start_y, dx, dy)
+                                prev_x, prev_y = start_x, start_y
+                                x, y = libtcod.line_step()
+                                while (x is not None):
+                                    (min, max) = get_min_max_dmg(monster.fighter.ranged_damage)
+                                    if (totalDamage == max):
+                                        libtcod.console_set_default_foreground(con, SHOT_CRIT_HIGH)
+                                    elif (totalDamage == min):
+                                        libtcod.console_set_default_foreground(con, SHOT_CRIT_LOW)
+                                    else:
+                                        libtcod.console_set_default_foreground(con, SHOT_NORMAL)
                                     #if libtcod.map_is_in_fov(fov_map, x, y):
-                                    libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                    normal_vec = point_to_point_vector(prev_x, prev_y, x, y)
+                                    if normal_vec == (1, 0) or normal_vec == (-1, 0): # bullet traveling right or left
+                                        libtcod.console_put_char(con, x, y, '-', libtcod.BKGND_NONE)
+                                    elif normal_vec == (0, 1) or normal_vec == (0, -1): # bullet traveling up or down
+                                        libtcod.console_put_char(con, x, y, '|', libtcod.BKGND_NONE)
+                                    elif normal_vec == (1, 1) or normal_vec == (-1, -1): # bullet traveling upright or downleft
+                                        libtcod.console_put_char(con, x, y, '\\', libtcod.BKGND_NONE)
+                                    elif normal_vec == (-1, 1) or normal_vec == (1, -1): # bullet traveling upleft or downright
+                                        libtcod.console_put_char(con, x, y, '/', libtcod.BKGND_NONE)
+                                    else: # TODO: DEBUG: this shouldn't be reached but if so, debug
+                                        libtcod.console_put_char(con, x, y, '*', libtcod.BKGND_NONE)
                                     libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
                                     libtcod.console_flush()
                                     sleep(PROJECTILE_SLEEP_TIME)
-                                    hit_obj = get_fighter_by_tile(x, y)
-                                    hasHit = True
-                                    if hit_obj and hit_obj.fighter:
-                                        monsterFound = True
-                                        message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
-                                        hit_obj.fighter.take_damage(totalDamage)
+                                    obj = get_fighter_by_tile(x, y)
+                                    if is_blocked(x, y) and obj is not None and obj.fighter and roll_to_hit(accuracy_bonus=monster.fighter.accuracy, evasion_penalty=obj.fighter.evasion) is True: # if bullet hits a blocked tile at x, y
+                                        #if libtcod.map_is_in_fov(fov_map, x, y):
+                                        libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                        libtcod.console_flush()
+                                        sleep(PROJECTILE_SLEEP_TIME)
+                                        hit_obj = get_fighter_by_tile(x, y)
+                                        hasHit = True
+                                        if hit_obj and hit_obj.fighter:
+                                            monsterFound = True
+                                            message(hit_obj.name + ' is shot for ' + str(totalDamage) + ' hit points.', libtcod.orange)
+                                            hit_obj.fighter.take_damage(totalDamage)
+                                            break
+                                        if monsterFound is False:
+                                            message('The ' + monster.name + '\'s shot misses!', libtcod.red)
                                         break
-                                    if monsterFound is False:
+                                    elif is_blocked(x, y) and obj is None:
+                                        #if libtcod.map_is_in_fov(fov_map, x, y):
+                                        libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
+                                        libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                        libtcod.console_flush()
+                                        sleep(PROJECTILE_SLEEP_TIME)
+                                        hasHit = True
                                         message('The ' + monster.name + '\'s shot misses!', libtcod.red)
-                                    break
-                                elif is_blocked(x, y) and obj is None:
-                                    #if libtcod.map_is_in_fov(fov_map, x, y):
-                                    libtcod.console_put_char(con, x, y, 'x', libtcod.BKGND_NONE)
-                                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                                    libtcod.console_flush()
-                                    sleep(PROJECTILE_SLEEP_TIME)
-                                    hasHit = True
-                                    message('The ' + monster.name + '\'s shot misses!', libtcod.red)
-                                    break
-                                else:
+                                        break
+                                    else:
+                                        libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                                        # redraws objs if a bullet is shot over them
+                                        #if obj is not None:
+                                        #    obj.draw()
+                                        render_all()
+                                        prev_x, prev_y = x, y
+                                        x, y = libtcod.line_step()
+                                if (x is not None): # delete bullet char from spot hit
                                     libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
-                                    # redraws objs if a bullet is shot over them
-                                    #if obj is not None:
-                                    #    obj.draw()
-                                    render_all()
-                                    prev_x, prev_y = x, y
-                                    x, y = libtcod.line_step()
-                            if (x is not None): # delete bullet char from spot hit
-                                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
-                                libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                            # bullet reached reticule, extend reticule
-                            start_x = dx
-                            start_y = dy
-                            dx = dx + m_x
-                            dy = dy + m_y
+                                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                # bullet reached reticule, extend reticule
+                                start_x = dx
+                                start_y = dy
+                                dx = dx + m_x
+                                dy = dy + m_y
+                        else: # cyborg reloads!
+                            monster.fighter.ten_mm_rounds += monster.fighter.max_ten_mm_rounds
+                            message(monster.name + ' reloads!', libtcod.orange)
 
                     else: # chance to move, 25%
                         monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
@@ -668,8 +680,99 @@ class CyborgAI:
             else: # if Cyborg doesn't see player, move
                 monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
 
+# AI for Renegades (shotgun-wielding, ranged)
+class RenegadeAI:
+    def take_turn(self):
+        if player.fighter.hp > 0:
+            render_all()
+            monster = self.owner
+            if libtcod.map_is_in_fov(fov_map, monster.x, monster.y): # if Renegade sees Player, chance to fire/move
+                if is_line_blocked_by_wall(monster.x, monster.y, player.x, player.y) is False:
+                    atk_chance = libtcod.random_get_int(0, 1, 100)
+
+                    if atk_chance < 50: #chance to fire weapon, 50%
+                        if monster.fighter.shells > 0: # if renegade has ammo
+                            monster.fighter.shells -= 1
+                            totalDamage = roll_dice(monster.fighter.ranged_damage)
+
+                            # AoE/cone effect calculation
+                            # get a vector of SHOTGUN_MAX_RANGE parallel to the reticule position
+                            # slope between player and reticule
+                            dx = player.x
+                            dy = player.y
+                            m_x = dx - monster.x
+                            m_y = dy - monster.y
+
+                            while get_dist_between_points(monster.x, monster.y, dx, dy) < RENEGADE_RANGE:
+                                dx += m_x
+                                dy += m_y
+
+                            # draw a square of (2 * SHOTGUN_SPREAD + 1) around this tile
+                            length = (2 * RENEGADE_SPREAD) + 1
+
+                            line_tiles = []
+                            # for each tile here, add to list of tiles to draw lines to
+                            for y in range(-MAP_HEIGHT, MAP_HEIGHT+RENEGADE_RANGE):
+                                for x in range(-MAP_WIDTH, MAP_WIDTH+RENEGADE_RANGE):
+                                    if x >= (dx - length/2) and x <= (dx + length/2) and y >= (dy - length/2) and y <= (dy + length/2):
+                                        line_tiles.append((x, y))
+                            
+                            hit_tiles = []
+                            puff_tiles = []
+                            libtcod.console_set_default_foreground(con, libtcod.red)
+                            # for each line_tile, draw a line to it (until hits a wall)
+                            for x, y in line_tiles:
+                                wall_found = False
+                                libtcod.line_init(monster.x, monster.y, x, y)
+                                x2, y2 = libtcod.line_step()
+                                while wall_found is False and x2 is not None:
+                                    obj = get_fighter_by_tile(x2, y2)
+                                    if (x2, y2) not in hit_tiles:
+                                        if is_blocked(x2, y2) and obj is not None: # HITS A FIGHTER
+                                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                                            if (x2, y2) not in hit_tiles:
+                                                hit_tiles.append((x2, y2))
+                                                puff_tiles.append((x2, y2))
+                                        elif is_blocked(x2, y2) and obj is None: # HITS A WALL
+                                            libtcod.console_put_char(con, x2, y2, 'x', libtcod.BKGND_NONE)
+                                            wall_found = True
+                                            if (x2, y2) not in puff_tiles:
+                                                puff_tiles.append((x2, y2))
+                                            break
+                                        else: # HITS NOTHING
+                                            if (x2, y2) not in hit_tiles:
+                                                hit_tiles.append((x2, y2))
+                                    x2, y2 = libtcod.line_step()
+                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            libtcod.console_flush()
+                            sleep(0.1)
+                            for x, y in puff_tiles:
+                                libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
+                            render_all()
+
+                            # if a tile has a drawn line through it, apply damage (with dmg reduction = 7% * distance)
+                            for x, y in hit_tiles:
+                                f = get_fighter_by_tile(x, y)
+                                if f is not None: # fighter found at tile (x, y)
+                                    new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(monster.x, monster.y)) * 0.07)))
+                                    if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
+                                        new_dmg = 1
+                                    message(f.name + ' takes ' + str(new_dmg) + ' damage!', libtcod.orange)
+                                    f.fighter.take_damage(new_dmg)
+
+                        else: # Renegade reloads!
+                            monster.fighter.shells += monster.fighter.max_shells
+                            message(monster.name + ' reloads!', libtcod.orange)
+
+                    else: # chance to move, 25%
+                        monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+                else: # if Renegade sees player but can't shoot player, move
+                    monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+            else: # if Renegade doesn't see player, move
+                monster.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+
 # AI for a temporarily confused monster (reverts to previous AI after a while).
-class ConfusedMonster:
+class ConfusedMonsterAI:
     def __init__(self, old_ai, num_turns=CONFUSE_NUM_TURNS):
         self.old_ai = old_ai
         self.num_turns = num_turns
@@ -1144,6 +1247,27 @@ def place_doors():
                         #     door.door.close()
                         #     objects.append(door)
 
+# TODO: Finish this function!
+# place terminals randomly in rooms located around the map
+def place_terminals():
+    global map, rooms
+
+    terminal_placed = False
+    for room in rooms:
+        for y in range(MAP_HEIGHT):
+            for x in range(MAP_WIDTH):
+                r = Rect(x, y, 1, 1)
+                r_int = libtcod.random_get_int(0, 0, 100)
+                if r.intersect(room) and not terminal_placed and r_int == 0:
+                    print('placing terminal...')
+                    libtcod.console_set_default_foreground(con, libtcod.white)
+                    libtcod.console_put_char(con, x, y, 'T', libtcod.BKGND_NONE)
+                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                    libtcod.console_flush()
+                    terminal_placed = True
+        terminal_placed = False
+    sleep(2)
+
 def make_map():
     global map, objects, stairs, rooms
     global CURRENT_REGION, WINDING_PERCENTAGE
@@ -1222,6 +1346,7 @@ def make_map():
 
     remove_dead_ends()
     place_doors()
+    # place_terminals()
 
     # create stairs at the center of the last room
     stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
@@ -1292,12 +1417,12 @@ def d(sides):
     return libtcod.random_get_int(0, 1, sides)
 
 # throw n dice of SIDES sides
-# NOTE: d_str = 'nds+b' ex: 2d4+1, p is the sign
-# n = number of dice
-# s = number of sides
-# b = bonus
-# p = sign
 def roll_dice(d_str):
+    # NOTE: d_str = 'nds+b' ex: 2d4+1, p is the sign
+    # n = number of dice
+    # s = number of sides
+    # b = bonus
+    # p = sign
     d_arr = d_str.split('d')
     n = int(d_arr[0])
     s = d_arr[1]
@@ -1442,7 +1567,7 @@ def create_shotgun_equipment():
 
 # Create and return a double shotgun component
 def create_double_shotgun_equipment():
-    return Equipment(slot='weapon', ammo=1, is_ranged=True, range=DOUBLE_SHOTGUN_RANGE, spread=DOUBLE_SHOTGUN_SPREAD, shoot_function=cast_shoot_double_shotgun, melee_damage=DOUBLE_SHOTGUN_MELEE_DAMAGE, ranged_damage=DOUBLE_SHOTGUN_RANGED_DAMAGE)
+    return Equipment(slot='weapon', ammo=2, is_ranged=True, range=DOUBLE_SHOTGUN_RANGE, spread=DOUBLE_SHOTGUN_SPREAD, shoot_function=cast_shoot_double_shotgun, melee_damage=DOUBLE_SHOTGUN_MELEE_DAMAGE, ranged_damage=DOUBLE_SHOTGUN_RANGED_DAMAGE)
 
 # Create and return a dagger component
 def create_dagger_equipment():
@@ -1505,7 +1630,7 @@ def create_door_component():
 
 # Create and return a teminatron fighter component
 def create_terminatron_fighter_component():
-    return Fighter(hp=100, armor=5, strength=13, accuracy=4, melee_damage=TERMINATRON_MELEE_DAMAGE, xp=10000, death_function=basic_monster_death)
+    return Fighter(hp=100, armor=5, strength=13, accuracy=2, melee_damage=TERMINATRON_MELEE_DAMAGE, xp=10000, death_function=basic_monster_death)
 
 # Create and return a mecharachnid fighter component
 def create_mecharachnid_fighter_component():
@@ -1513,7 +1638,11 @@ def create_mecharachnid_fighter_component():
 
 # Create and return a cyborg fighter component
 def create_cyborg_fighter_component():
-    return Fighter(hp=8, armor=0, strength=2, accuracy=2, xp=35, ranged_damage=CYBORG_RANGED_DAMAGE, death_function=cyborg_death)
+    return Fighter(hp=8, armor=0, accuracy=1, xp=35, ten_mm_rounds=7, max_ten_mm_rounds=7, ranged_damage=CYBORG_RANGED_DAMAGE, death_function=cyborg_death)
+
+# Create and return a Renegade fighter component
+def create_renegade_fighter_component():
+    return Fighter(hp=8, armor=1, xp=60, shells=1, max_shells=1, ranged_damage=RENEGADE_RANGED_DAMAGE, death_function=renegade_death)
 
 #############################
 ## Fighter Death Functions ##
@@ -1554,7 +1683,7 @@ def basic_monster_death(monster):
     if (totalMonstersLeft == 0):
         message('The halls become quiet...', libtcod.light_blue)
 
-# Cyborg death function (drop ammo, weapon)
+# Cyborg death function (drop ten_mm, pistol)
 def cyborg_death(monster):
     # drop pistol on death
     (x, y) = get_unblocked_tile_around(monster.x, monster.y)
@@ -1570,6 +1699,42 @@ def cyborg_death(monster):
     if x is not None and ammo_drop_chance < 75:
         item_component = Item()
         item = Object(x, y, '"', '10mm ammo', TENMM_AMMO_COLOR, capacity=7, max_capacity=100, item=item_component, always_visible=True, z=ITEM_Z_VAL) #TODO: debug: fix capacity
+        objects.append(item)
+        item.send_to_back()
+
+    message(monster.name.capitalize() + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.', libtcod.orange)
+    monster.char = '%'
+    monster.color = libtcod.dark_red
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remains of ' + monster.name
+    monster.z = CORPSE_Z_VAL
+    monster.send_to_back()
+
+    totalMonstersLeft = 0
+    for obj in objects:
+        if obj.fighter and obj != player:
+            totalMonstersLeft += 1
+    if (totalMonstersLeft == 0):
+        message('The halls become quiet...', libtcod.light_blue)
+
+# Renegade death function (drop shells, shotgun)
+def renegade_death(monster):
+    # drop shotgun on death
+    (x, y) = get_unblocked_tile_around(monster.x, monster.y)
+    shotgun_drop_chance = libtcod.random_get_int(0, 1, 100)
+    if x is not None and shotgun_drop_chance < 15:
+        equipment_component = create_shotgun_equipment()
+        item = Object(x, y, '}', 'Shotgun', SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+        objects.append(item)
+
+    # drop ammo on death
+    (x, y) = get_unblocked_tile_around(monster.x, monster.y)
+    ammo_drop_chance = libtcod.random_get_int(0, 1, 100)
+    if x is not None and ammo_drop_chance < 50:
+        item_component = Item()
+        item = Object(x, y, '"', 'Shells', SHELLS_COLOR, capacity=5, max_capacity=50, item=item_component, always_visible=True, z=ITEM_Z_VAL)
         objects.append(item)
         item.send_to_back()
 
@@ -1628,7 +1793,8 @@ def place_objects(room):
     # chance of each monster
     monster_chances = {}
     monster_chances['cyborg'] = 70
-    monster_chances['mecharachnid'] = from_dungeon_level([[29, 1], [25, 3], [50, 5]])
+    monster_chances['renegade'] = from_dungeon_level([[20, 1]]) # TODO: DEBUGGING, REMOVE THIS
+    monster_chances['mecharachnid'] = from_dungeon_level([[20, 1], [25, 3], [50, 5]])
     monster_chances['terminatron'] = from_dungeon_level([[1, 1], [5, 3], [8, 5]])
 
     # maximum number of items per room
@@ -1646,9 +1812,9 @@ def place_objects(room):
     item_chances['double_shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
     item_chances['sniper'] = from_dungeon_level([[5, 1]])
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['shell'] = from_dungeon_level([[20, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['shell'] = from_dungeon_level([[15, 1]]) # TODO: FIX THIS NUMBER
     item_chances['50cal ammo'] = from_dungeon_level([[10, 1]])
-    item_chances['health_canister'] = from_dungeon_level([[15, 1]])
+    item_chances['health_canister'] = from_dungeon_level([[20, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
     item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
     item_chances['antidote_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
@@ -1712,6 +1878,10 @@ def place_objects(room):
                 fighter_component = create_cyborg_fighter_component()
                 ai_component = CyborgAI()
                 monster = Object(x, y, 'c', 'Cyborg', CYBORG_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
+            elif choice == 'renegade':
+                fighter_component = create_renegade_fighter_component()
+                ai_component = RenegadeAI()
+                monster = Object(x, y, 'r', 'Renegade', RENEGADE_COLOR, blocks=True, fighter=fighter_component, ai=ai_component, z=MONSTER_Z_VAL)
 
             objects.append(monster)
 
@@ -1938,7 +2108,7 @@ def display_enemy_information():
         if obj.fighter and obj is not player and libtcod.map_is_in_fov(fov_map, obj.x, obj.y): # if the object is a Fighter and it's within FOV
             libtcod.console_set_default_foreground(hud_panel, obj.color)
             chance_to_hit = 10 + (player.fighter.accuracy - obj.fighter.evasion)
-            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2 + ind, libtcod.BKGND_NONE, libtcod.LEFT, obj.char + ' ' + obj.name + ' (' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%%)')
+            libtcod.console_print_ex(hud_panel, 1, SCREEN_HEIGHT/2 + ind, libtcod.BKGND_NONE, libtcod.LEFT, obj.char + ' ' + obj.name + ' (' + str(round((chance_to_hit / float(18)) * 100, 1)) + '%)')
             # show the fighter's health
             render_bar(1, SCREEN_HEIGHT/2 + ind + 1, int(BAR_WIDTH/1.25), 'HP', obj.fighter.hp, obj.fighter.base_max_hp, PLAYER_HP_FOREGROUND, PLAYER_HP_BACKGROUND)
             ind += 3
@@ -2443,7 +2613,7 @@ def cast_EMP_device():
     for monster in monsters:
         # replace the monster's AI with a "confused" one; after some turns it will restore the old AI
         old_ai = monster.ai
-        monster.ai = ConfusedMonster(old_ai)
+        monster.ai = ConfusedMonsterAI(old_ai)
         monster.ai.owner = monster #tell the new component who owns it
         message('The ' + monster.name + ' starts to go haywire, stumbling around!', libtcod.light_green)
 
@@ -2691,7 +2861,12 @@ def cast_shoot_double_shotgun(dx, dy, weapon):
 
         if weapon.ammo > 0:
             totalDamage = roll_dice(player.fighter.ranged_damage)
-            weapon.ammo -= 1
+            if weapon.ammo == 1:
+                weapon.ammo -= 1
+                spread = weapon.spread / 2
+            if weapon.ammo == 2:
+                weapon.ammo -= 2
+                spread = weapon.spread
 
             # AoE/cone effect calculation
             # get a vector of SHOTGUN_MAX_RANGE parallel to the reticule position
@@ -2704,7 +2879,7 @@ def cast_shoot_double_shotgun(dx, dy, weapon):
                 dy += m_y
 
             # draw a square of (2 * SHOTGUN_SPREAD + 1) around this tile
-            length = (2 * weapon.spread) + 1
+            length = (2 * spread) + 1
 
             line_tiles = []
             # for each tile here, add to list of tiles to draw lines to
@@ -3335,7 +3510,7 @@ def new_game():
     objects = []
     
     #create object representing the player
-    fighter_component = Fighter(hp=100, xp=0, ten_mm_rounds=7, shells=6, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
+    fighter_component = Fighter(hp=100, xp=0, ten_mm_rounds=7, shells=5, death_function=player_death, run_status="rested", run_duration=RUN_DURATION)
     player = Object(0, 0, '@', 'Player', PLAYER_COLOR, blocks=True, fighter=fighter_component, z=PLAYER_Z_VAL)
 
     player.level = 1
@@ -3505,7 +3680,7 @@ def main_menu():
         libtcod.console_print_ex(0, SCREEN_WIDTH/2, SCREEN_HEIGHT-2, libtcod.BKGND_NONE, libtcod.CENTER, 'By Ninjalah')
 
         # show options and wait for the player's choice
-        choice = menu('', [('Play a new game', libtcod.white), ('Continue last game', libtcod.light_grey), ('Quit', libtcod.grey)], 24)
+        choice = menu('', [('Play a new game', libtcod.white), ('Continue last game', libtcod.lighter_grey), ('Quit', libtcod.grey)], 24)
 
         if choice == 0: #new game
             new_game()
@@ -3522,7 +3697,7 @@ def main_menu():
 
 libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 # libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-#libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+# libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(MAP_WIDTH, MAP_HEIGHT)
