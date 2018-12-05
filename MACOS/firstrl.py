@@ -44,6 +44,7 @@ ROOM_MIN_SIZE = 7
 MAX_ROOMS = 99 # this was 30
 CURRENT_REGION = -1
 WINDING_PERCENTAGE = 20
+DOOR_CHANCE = 30
 
 # Experience and level-ups
 ## TODO: Return back to normal (200)
@@ -63,7 +64,7 @@ CONFUSE_RANGE = 8
 IMPACT_GRENADE_RADIUS = 5
 IMPACT_GRENADE_DAMAGE = '4d6+10'
 POISON_DAMAGE = 1 # per tick
-POISON_DURATION = 100
+POISON_DURATION = 50
 
 ############################
 ## Canister Color Globals ##
@@ -167,6 +168,7 @@ DAGGER_COLOR = libtcod.white
 TENMM_AMMO_COLOR = libtcod.white
 SHELLS_COLOR = libtcod.light_grey
 FIFTYCAL_AMMO_COLOR = libtcod.darker_green
+DOOR_COLOR = libtcod.lighter_sepia
 
 #################
 ## Shot Colors ##
@@ -889,7 +891,6 @@ class Door:
         self.is_locked = is_locked
     
     def open(self):
-        print('Attempting to open door...')
         if not self.is_open and not self.is_locked:
             self.is_open = True
             self.owner.char = '/'
@@ -901,7 +902,6 @@ class Door:
                         libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
     
     def close(self):
-        print('Attempting to close door...')
         if self.is_open and not self.is_locked:
             self.is_open = False
             self.owner.char = '+'
@@ -968,6 +968,15 @@ def get_trap_by_tile(x, y):
             return obj
     return None
 
+# returns list of doors surrounded by (x, y)
+def get_doors_around_tile(x, y):
+    doors = []
+    for obj in objects:
+        dist = obj.distance(x, y)
+        if obj.door and int(dist) <= 1 and int(dist) > 0: # return all door objs within 1 distance of tile
+            doors.append(obj)
+    return doors
+
 # take two points, return the vector between them
 def point_to_point_vector(start_x, start_y, end_x, end_y):
     return (end_x - start_x, end_y - start_y)
@@ -981,12 +990,14 @@ def carve((x, y)):
     global map
     map[x][y].blocked = False
     map[x][y].block_sight = False
+    # map[x][y].explored = True # TODO: DEBUGGING, REMOVE
 
 # 'uncarves' a portion of the map
 def uncarve((x, y)):
     global map
     map[x][y].blocked = True
     map[x][y].block_sight = True
+    # map[x][y].explored = True # TODO: DEBUGGING, REMOVE
 
 # returns true if pos is carvable in some direction, false if not
 def can_carve((x, y), (dx, dy)):
@@ -1033,17 +1044,22 @@ def grow_maze((x, y)):
         # see which adjacent cells are open
         unmade_cells = []
         for direction in cardinal_directions:
+            if last_direction:
+                dx, dy = direction
+                lx, ly = last_direction
+                if (lx*-1, ly*-1) == (dx, dy):
+                    continue
             if can_carve(cell, direction):
                 unmade_cells.append(direction)
 
         if unmade_cells:
             direction = None
-            # based on "windy" passages are, try to prefer carving in the same direction
+            # based on how "windy" passages are, try to prefer carving in the same direction
             if last_direction in unmade_cells and libtcod.random_get_int(0, 0, 100) > WINDING_PERCENTAGE:
                 direction = last_direction
             else:
                 random.shuffle(unmade_cells)
-                direction = unmade_cells[len(unmade_cells) - 1]
+                direction = unmade_cells.pop()
 
             (cx, cy) = cell
             (dx, dy) = direction
@@ -1085,7 +1101,7 @@ def remove_dead_ends():
                             if not is_blocked(x + dx, y + dy):
                                 exits += 1
                     
-                    if exits == 1:
+                    if exits <= 1:
                         done = False
                         uncarve((x, y))
 
@@ -1100,18 +1116,33 @@ def place_doors():
     x_cardinal_directions = [(-1, 0), (1, 0)]
     y_cardinal_directions = [(0, -1), (0, 1)]
 
-    for y in range(MAP_HEIGHT):
-        for x in range(MAP_WIDTH):
-            r = Rect(x, y, 1, 1)
-            for room in rooms:
+    for room in rooms:
+        for y in range(MAP_HEIGHT):
+            for x in range(MAP_WIDTH):
+                r = Rect(x, y, 1, 1)
                 if r.intersect(room):
                     for (dx, dy) in x_cardinal_directions:
                         r2 = Rect(x+dx, y+dy, 1, 1)
-                        if not is_blocked(x, y) and (x + dx) < MAP_WIDTH and (x + dx) > 0 and not is_blocked(x+dx, y+dy) and (x + dx * 2) < MAP_WIDTH and (x + dx * 2) > 0 and not is_blocked(x+dx*2, y+dy*2) and not r2.intersect(room):
+                        r_int = libtcod.random_get_int(0, 0, 100)
+                        if r_int <= DOOR_CHANCE and not is_blocked(x, y) and (x + dx) < MAP_WIDTH and (x + dx) > 0 and not is_blocked(x+dx, y) and (x + dx * 2) < MAP_WIDTH and (x + dx * 2) > 0 and not is_blocked(x+dx*2, y) and not r2.intersect(room):
                             door_component = create_door_component()
-                            door = Object(x, y, '+', 'Door', libtcod.white, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                            door = Object(x, y, '+', 'Door', DOOR_COLOR, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
                             door.door.close()
                             objects.append(door)
+                    for (dx, dy) in y_cardinal_directions:
+                        r2 = Rect(x+dx, y+dy, 1, 1)
+                        r_int = libtcod.random_get_int(0, 0, 100)
+                        if r_int <= DOOR_CHANCE and not is_blocked(x, y) and (y + dy) < MAP_HEIGHT and (y + dy) > 0 and not is_blocked(x, y+dy) and (y + dy * 2) < MAP_HEIGHT and (y + dy * 2) > 0 and not is_blocked(x, y+dy*2) and not r2.intersect(room):
+                            door_component = create_door_component()
+                            door = Object(x, y, '+', 'Door', DOOR_COLOR, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                            door.door.close()
+                            objects.append(door)
+                        # if not is_blocked(x, y) and (y + dy) < MAP_HEIGHT and (y + dy) > 0 and is_blocked(x, y+dy) and (y + dy * 2) < MAP_HEIGHT and (y + dy * 2) > 0 and not is_blocked(x, y+dy*2):
+                        #     print('special door placed!')
+                        #     door_component = create_door_component()
+                        #     door = Object(x, y+dy, '+', 'Door', DOOR_COLOR, door=door_component, blocks=False, always_visible=True, z=ITEM_Z_VAL)
+                        #     door.door.close()
+                        #     objects.append(door)
 
 def make_map():
     global map, objects, stairs, rooms
@@ -1653,7 +1684,6 @@ def place_objects(room):
                     trap = Object(x, y, ' ', 'Poison Trap', libtcod.dark_green, blocks=False, trap=trap_component, always_visible=True, z=TRAP_Z_VAL)
 
                 if trap is not None:
-                    print('Adding trap...')
                     objects.append(trap)
 
     # choose random number of monsters
@@ -2722,10 +2752,7 @@ def cast_shoot_double_shotgun(dx, dy, weapon):
             for x, y in hit_tiles:
                 f = get_fighter_by_tile(x, y)
                 if f is not None: # fighter found at tile (x, y)
-                    print('Before reduc: ' + str(totalDamage))
-                    print('Dist: ' + str(float(f.distance(player.x, player.y))) + ' Reduc: ' + str(float(f.distance(player.x, player.y)) * 0.10))
                     new_dmg = int(totalDamage - (float(totalDamage) * (float(f.distance(player.x, player.y)) * 0.10)))
-                    print('After reduc: ' + str(new_dmg))
                     if new_dmg <= 0: # if damage after distance reduction is less than or equal to 0, make 1
                         new_dmg = 1
                     message(f.name + ' takes ' + str(new_dmg) + ' damage!', libtcod.orange)
@@ -2875,7 +2902,6 @@ def can_reload_weapon(ammo_type):
 # reloads the weapon passed into it
 def cast_reload_weapon(ammo_type, weapon):
     amount_to_reload = weapon.max_ammo - weapon.ammo
-    print('Amount_to_reload: ' + str(amount_to_reload))
     if ammo_type in '10mm ammo': # 10mm using weapons
         if amount_to_reload > player.fighter.ten_mm_rounds: #can reload some, not all
             weapon.ammo += player.fighter.ten_mm_rounds
@@ -2906,7 +2932,6 @@ def cast_reload():
 
     if weapon is not None and weapon.is_ranged: # if this is a ranged weapon
         ammo_type = get_ammo_type(weapon.shoot_function) # get weapon type
-        print('Ammo_type: ' + ammo_type)
         if weapon.ammo >= weapon.max_ammo: # already at full ammo!
                 message(weapon.owner.name + ' is already full of ammo!', libtcod.red)
                 return 'cancelled'
@@ -2984,7 +3009,6 @@ def msgbox(text, width=50):
 # finds an object in inventory, retrieves it
 def find_in_inventory(obj_str):
     for item in inventory:
-        print('Item: ' + item.name)
         if item.name == obj_str:
             return item
     
@@ -3115,7 +3139,6 @@ def handle_keys():
                     else:
                         return 'didnt-take-turn'
                 elif is_aiming_item is True: # if you are aiming an item
-                    print('Item is ' + str(item))
                     if item is not None and cast_shoot_item(reticule.x, reticule.y, item) is not 'cancelled':
                         player.fighter.has_moved_this_turn = False
                         return 'turn-taken'
@@ -3191,6 +3214,16 @@ def handle_keys():
             # test for other keys
             key_char = chr(key.c)
 
+            # close doors nearby
+            if key_char == 'c':
+                doors = get_doors_around_tile(player.x, player.y)
+                if doors:
+                    for d in doors:
+                        if d.door.is_open:
+                            fov_recompute = True
+                            d.door.close()
+                    return 'turn-taken'
+
             if key_char == 'g':
                 # pick up an item
                 for object in objects: #look for an item in the player's tile
@@ -3206,15 +3239,6 @@ def handle_keys():
                     player.fighter.has_moved_this_turn = False
                     chosen_item.use()
                     return 'turn-taken'
-
-            if key_char == 'c':
-                # show character stats
-                print('Player.fighter: ' + str(player.fighter))
-                LEVEL_UP_XP = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
-                msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
-                    '\nExperience to level up: ' + str(LEVEL_UP_XP) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
-                    '\nMelee Damage: ' + str(player.fighter.melee_damage) + '\nRanged Damage: ' + str(player.fighter.ranged_damage) +
-                     '\nArmor: ' + str(player.fighter.armor), CHARACTER_SCREEN_WIDTH)
 
             if key_char == 'r':
                 # reload current weapon
@@ -3239,6 +3263,14 @@ def handle_keys():
                 if stairs.x == player.x and stairs.y == player.y:
                     player.fighter.has_moved_this_turn = False
                     next_level()
+
+            if key_char == '2' and key.shift:
+                # show character stats
+                LEVEL_UP_XP = LEVEL_UP_BASE + player.level * LEVEL_UP_FACTOR
+                msgbox('Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) + 
+                    '\nExperience to level up: ' + str(LEVEL_UP_XP) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) + 
+                    '\nMelee Damage: ' + str(player.fighter.melee_damage) + '\nRanged Damage: ' + str(player.fighter.ranged_damage) +
+                     '\nArmor: ' + str(player.fighter.armor), CHARACTER_SCREEN_WIDTH)
 
             return 'didnt-take-turn'
 
