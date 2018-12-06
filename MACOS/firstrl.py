@@ -122,6 +122,22 @@ SNIPER_ACCURACY_BONUS = 4
 DAGGER_DAMAGE = '2d4'
 DAGGER_ACCURACY_BONUS = 3
 
+########################
+## Fixed Armor Values ##
+########################
+# Helms
+KEVLAR_HELMET_ARMOR_BONUS = 1
+
+# Chests
+KEVLAR_CHEST_ARMOR_BONUS = 1
+
+# Hands
+
+# Legs
+KEVLAR_LEGS_ARMOR_BONUS = 1
+
+# Boots
+
 #########################
 
 ##########################
@@ -175,6 +191,7 @@ TENMM_AMMO_COLOR = libtcod.white
 SHELLS_COLOR = libtcod.light_grey
 FIFTYCAL_AMMO_COLOR = libtcod.dark_green
 DOOR_COLOR = libtcod.lighter_sepia
+KEVLAR_COLOR = libtcod.light_grey
 
 #################
 ## Shot Colors ##
@@ -198,8 +215,8 @@ game_state = 'playing'
 # CLASS DEFINITIONS #
 #####################
 
+#a tile of the map and its properties
 class Tile:
-    #a tile of the map and its properties
     def __init__(self, blocked, block_sight = None):
         self.blocked = blocked
 
@@ -210,8 +227,8 @@ class Tile:
         if block_sight is None: block_sight = blocked
         self.block_sight = block_sight
  
+#a rectangle on the map. used to characterize a room.
 class Rect:
-    #a rectangle on the map. used to characterize a room.
     def __init__(self, x, y, w, h):
         self.x1 = x
         self.y1 = y
@@ -228,12 +245,12 @@ class Rect:
         return (self.x1 <= other.x2 and self.x2 >= other.x1 and
                 self.y1 <= other.y2 and self.y2 >= other.y1)
  
+#this is a generic object: the player, a monster, an item, the stairs...
+#it's always represented by a character on screen.
 class Object:
-    #this is a generic object: the player, a monster, an item, the stairs...
-    #it's always represented by a character on screen.
     # TODO: Remove max_capacity from game? Currently no purpose.
     def __init__(self, x, y, char, name, color, capacity=None, max_capacity=None, blocks=False, always_visible=False, fighter=None,
-        ai=None, item=None, equipment=None, canister=None, trap=None, door=None, z=0):
+        ai=None, item=None, equipment=None, canister=None, trap=None, door=None, terminal=None, z=0):
         self.x = x
         self.y = y
         self.z = z
@@ -263,6 +280,10 @@ class Object:
         self.door = door
         if self.door: # let the Door component know who owns it
             self.door.owner = self
+
+        self.terminal = terminal
+        if self.terminal: # let the Terminal component know who owns it
+            self.terminal.owner = self
 
         self.canister = canister
         if self.canister: # let the Canister component know who owns it
@@ -1015,6 +1036,22 @@ class Door:
                     for x in range(MAP_WIDTH):
                         libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
 
+# TODO: Finish Terminal Class and functionality
+# a Terminal that has many functions (heal the player, repair armor, open locked doors, starts a countdown until poison gas release,
+# reveals a bit of lore, disables robotic enemies, etc.)
+class Terminal:
+    def __init__(self, is_accessed=False, access_function=None):
+        self.is_accessed = is_accessed
+        self.access_function = access_function
+
+    def access(self):
+        if not self.is_accessed:
+            message('You attempt to access the terminal...', libtcod.green)
+            self.access_function(self)
+            self.is_accessed = True
+        else:
+            message('The terminal is turned off.', libtcod.red)
+
 ########################
 # FUNCTION DEFINITIONS #
 ########################
@@ -1029,6 +1066,14 @@ def is_blocked(x, y):
         if object.blocks and object.x == x and object.y == y:
             return True
 
+    return False
+
+# tests if a map tile is in a hallway or not (has two blocked tiles north/south or east/west)
+def is_in_hallway(x, y):
+    if is_blocked(x+1, y) and is_blocked(x-1, y):
+        return True
+    if is_blocked(x, y+1) and is_blocked(x, y-1):
+        return True
     return False
 
 # tests if a line has at least one segment blocked, excluding objects
@@ -1256,16 +1301,24 @@ def place_terminals():
     for room in rooms:
         for y in range(MAP_HEIGHT):
             for x in range(MAP_WIDTH):
-                r = Rect(x, y, 1, 1)
-                r_int = libtcod.random_get_int(0, 0, 100)
-                if r.intersect(room) and not terminal_placed and r_int == 0:
-                    print('placing terminal...')
-                    libtcod.console_set_default_foreground(con, libtcod.white)
-                    libtcod.console_put_char(con, x, y, 'T', libtcod.BKGND_NONE)
-                    libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                    libtcod.console_flush()
-                    terminal_placed = True
-        terminal_placed = False
+                r_int = libtcod.random_get_int(0, 1, 100)
+                if r_int <= 10:
+                    if not is_blocked(x, y) and not is_in_hallway(x, y):
+                        r = Rect(x, y, 1, 1)
+                        r_int = libtcod.random_get_int(0, 1, 100)
+                        if r.intersect(room) and not terminal_placed:
+                            print('placing terminal...')
+                            # TODO: Remove below
+                            libtcod.console_set_default_foreground(con, libtcod.white)
+                            libtcod.console_put_char(con, x, y, 'T', libtcod.BKGND_NONE)
+                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                            libtcod.console_flush()
+                            # Place Terminal
+                            terminal_component = create_terminal_component()
+                            obj = Object(x, y, '&', 'Terminal', libtcod.lighter_grey, terminal=terminal_component, blocks=True, always_visible=True, z=ITEM_Z_VAL)
+                            objects.append(obj)
+                            terminal_placed = True
+    terminal_placed = False
     sleep(2)
 
 def make_map():
@@ -1346,7 +1399,7 @@ def make_map():
 
     remove_dead_ends()
     place_doors()
-    # place_terminals()
+    place_terminals()
 
     # create stairs at the center of the last room
     stairs = Object(new_x, new_y, '>', 'stairs', STAIRS_COLOR, always_visible=True, z=STAIRS_Z_VAL)
@@ -1554,7 +1607,7 @@ def get_canister_name_from_function(function):
         return 'ADD CANISTER NAME'
 
 ##################################
-## Equipment Creation Functions ##
+## Weapon Creation Functions ##
 ##################################
 
 # Create and return a pistol component
@@ -1576,6 +1629,22 @@ def create_dagger_equipment():
 # Create and return a sniper component
 def create_sniper_equipment():
     return Equipment(slot='weapon', ammo=1, is_ranged=True, shoot_function=cast_shoot_sniper, melee_damage=SNIPER_MELEE_DAMAGE, ranged_damage=SNIPER_RANGED_DAMAGE, accuracy_bonus=SNIPER_ACCURACY_BONUS)
+
+##############################
+## Armor Creation Functions ##
+##############################
+
+# Create and return a kevlar helmet component
+def create_kevlar_helmet_equipment():
+    return Equipment(slot='head', armor_bonus=KEVLAR_HELMET_ARMOR_BONUS)
+
+# Create and return a kevlar chest component
+def create_kevlar_chest_equipment():
+    return Equipment(slot='chest', armor_bonus=KEVLAR_CHEST_ARMOR_BONUS)
+
+# Create and return a kevlar leg component
+def create_kevlar_legs_equipment():
+    return Equipment(slot='legs', armor_bonus=KEVLAR_LEGS_ARMOR_BONUS)
 
 #############################
 ## Item Creation Functions ##
@@ -1623,6 +1692,12 @@ def create_poison_trap_component():
 #############################
 def create_door_component():
     return Door(is_open=True)
+
+###################################
+## Terminal Creation Function(s) ##
+###################################
+def create_terminal_component():
+    return Terminal(access_function=cast_heal)
 
 ################################
 ## Monster Creation Functions ##
@@ -1802,22 +1877,30 @@ def place_objects(room):
 
     # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
     item_chances = {}
+    # Items
     item_chances['scanner'] = from_dungeon_level([[5, 1]])
     item_chances['lightning'] = from_dungeon_level([[5, 1], [5, 4]])
     item_chances['impact_grenade'] = from_dungeon_level([[5, 1], [5, 6]])
     item_chances['emp'] = from_dungeon_level([[5, 1], [10, 2]])
+    # Weapons
     item_chances['dagger'] = from_dungeon_level([[10, 1]])
     item_chances['pistol'] = from_dungeon_level([[10, 1]])
-    item_chances['shotgun'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['double_shotgun'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['shotgun'] = from_dungeon_level([[10, 1]])
+    item_chances['double_shotgun'] = from_dungeon_level([[5, 1]])
     item_chances['sniper'] = from_dungeon_level([[5, 1]])
+    # Armor
+    item_chances['kevlar_helm'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['kevlar_chest'] = from_dungeon_level([[10, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['kevlar_legs'] = from_dungeon_level([[10, 1]])
+    # Ammo
     item_chances['10mm ammo'] = from_dungeon_level([[20, 1]])
-    item_chances['shell'] = from_dungeon_level([[15, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['shell'] = from_dungeon_level([[15, 1]])
     item_chances['50cal ammo'] = from_dungeon_level([[10, 1]])
+    # Canisters
     item_chances['health_canister'] = from_dungeon_level([[20, 1]])
     item_chances['strength_canister'] = from_dungeon_level([[5, 1]])
-    item_chances['poison_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
-    item_chances['antidote_canister'] = from_dungeon_level([[5, 1]]) # TODO: FIX THIS NUMBER
+    item_chances['poison_canister'] = from_dungeon_level([[5, 1]])
+    item_chances['antidote_canister'] = from_dungeon_level([[5, 1]])
 
     # maximum number of traps
     max_traps = from_dungeon_level([[2, 1]])
@@ -1825,8 +1908,8 @@ def place_objects(room):
     # chance of each trap spawning
     trap_chances = {}
     trap_chances['none'] = from_dungeon_level([[95, 1]])
-    trap_chances['explosive_trap'] = from_dungeon_level([[5, 1]]) # TODO: DEBUGGING, CHANGE
-    trap_chances['poison_trap'] = from_dungeon_level([[5, 1]]) # TODO: DEBUGGING, CHANGE
+    trap_chances['explosive_trap'] = from_dungeon_level([[5, 1]])
+    trap_chances['poison_trap'] = from_dungeon_level([[5, 1]])
 
     # choose random number of traps
     num_traps = libtcod.random_get_int(0, 0, max_traps)
@@ -1932,6 +2015,18 @@ def place_objects(room):
                 # create a double shotgun
                 equipment_component = create_double_shotgun_equipment()
                 item = Object(x, y, '}', 'Sawed-off Shotgun', DOUBLE_SHOTGUN_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'kevlar_helm':
+                # create a kevlar helmet
+                equipment_component = create_kevlar_helmet_equipment()
+                item = Object(x, y, ']', 'Kevlar Helmet', KEVLAR_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'kevlar_chest':
+                # create a kevlar chest
+                equipment_component = create_kevlar_chest_equipment()
+                item = Object(x, y, ']', 'Kevlar Chestpiece', KEVLAR_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
+            elif choice == 'kevlar_legs':
+                # create a kevlar legs
+                equipment_component = create_kevlar_legs_equipment()
+                item = Object(x, y, ']', 'Kevlar Slacks', KEVLAR_COLOR, equipment=equipment_component, always_visible=True, z=ITEM_Z_VAL)
             elif choice == '10mm ammo':
                 # create a 10mm_ammo
                 item_component = Item()
@@ -2276,8 +2371,12 @@ def player_move_or_attack(dx, dy):
     # attack if target found, otherwise move
     if target is not None and target.fighter: # TODO: add AND conditional to check that weapon is melee
         player.fighter.attack(target)
-    elif target is not None and target.door and not target.door.is_open:
+    elif target is not None and target.door and not target.door.is_open: # TODO: Change this by allowing NPCs to open doors
         target.door.open()
+        fov_recompute = True
+    elif target is not None and target.terminal and not target.terminal.is_accessed:
+        print('Accessing terminal!')
+        target.terminal.access()
         fov_recompute = True
     else:
         player.move(dx, dy)
