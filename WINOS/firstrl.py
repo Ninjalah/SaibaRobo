@@ -193,6 +193,10 @@ FIFTYCAL_AMMO_COLOR = libtcod.dark_green
 DOOR_COLOR = libtcod.lighter_sepia
 KEVLAR_COLOR = libtcod.light_grey
 
+## Terminals ##
+ACTIVE_TERMINAL_COLOR = libtcod.light_grey
+INACTIVE_TERMINAL_COLOR = libtcod.darker_grey
+
 #################
 ## Shot Colors ##
 #################
@@ -1047,8 +1051,9 @@ class Terminal:
     def access(self):
         if not self.is_accessed:
             message('You attempt to access the terminal...', libtcod.green)
-            self.access_function(self)
+            self.access_function()
             self.is_accessed = True
+            self.owner.color = INACTIVE_TERMINAL_COLOR
         else:
             message('The terminal is turned off.', libtcod.red)
 
@@ -1299,25 +1304,26 @@ def place_terminals():
 
     terminal_placed = False
     for room in rooms:
-        for y in range(MAP_HEIGHT):
-            for x in range(MAP_WIDTH):
-                r_int = libtcod.random_get_int(0, 1, 100)
-                if r_int <= 10:
-                    if not is_blocked(x, y) and not is_in_hallway(x, y):
-                        r = Rect(x, y, 1, 1)
-                        r_int = libtcod.random_get_int(0, 1, 100)
-                        if r.intersect(room) and not terminal_placed:
-                            print('placing terminal...')
-                            # TODO: Remove below
-                            libtcod.console_set_default_foreground(con, libtcod.white)
-                            libtcod.console_put_char(con, x, y, 'T', libtcod.BKGND_NONE)
-                            libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                            libtcod.console_flush()
-                            # Place Terminal
-                            terminal_component = create_terminal_component()
-                            obj = Object(x, y, '&', 'Terminal', libtcod.lighter_grey, terminal=terminal_component, blocks=True, always_visible=True, z=ITEM_Z_VAL)
-                            objects.append(obj)
-                            terminal_placed = True
+        r_int = libtcod.random_get_int(0, 1, 100)
+        if r_int <= 10:
+            while not terminal_placed:
+                for y in range(MAP_HEIGHT):
+                    for x in range(MAP_WIDTH):
+                        p_int = libtcod.random_get_int(0, 1, 100)
+                        if p_int < 5 and not is_blocked(x, y) and not is_in_hallway(x, y):
+                            r = Rect(x, y, 1, 1)
+                            if r.intersect(room) and not terminal_placed:
+                                print('placing terminal...')
+                                # TODO: Remove below
+                                libtcod.console_set_default_foreground(con, libtcod.white)
+                                libtcod.console_put_char(con, x, y, 'T', libtcod.BKGND_NONE)
+                                libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                                libtcod.console_flush()
+                                # Place Terminal
+                                terminal_component = create_terminal_component()
+                                obj = Object(x, y, '&', 'Terminal', ACTIVE_TERMINAL_COLOR, terminal=terminal_component, blocks=True, always_visible=True, z=ITEM_Z_VAL)
+                                objects.append(obj)
+                                terminal_placed = True
     terminal_placed = False
     sleep(2)
 
@@ -2360,12 +2366,15 @@ def player_move_or_attack(dx, dy):
 
     # attempt to find attackable object there
     target = None
-    for object in objects:
-        if object.fighter and object.x == x and object.y == y:
-            target = object
+    for obj in objects:
+        if obj.fighter and obj.x == x and obj.y == y:
+            target = obj
             break
-        if object.door and object.x == x and object.y == y:
-            target = object
+        if obj.door and obj.x == x and obj.y == y:
+            target = obj
+            break
+        if obj.terminal and obj.x is x and obj.y is y:
+            target = obj
             break
 
     # attack if target found, otherwise move
@@ -3794,9 +3803,9 @@ def main_menu():
         elif choice == 2: # quit
             break
 
-libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+# libtcod.console_set_custom_font('dejavu_wide12x12_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 # libtcod.console_set_custom_font('dejavu_wide16x16_gs_tc.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-# libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, 'python/libtcod tutorial', False)
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(MAP_WIDTH, MAP_HEIGHT)
@@ -3808,4 +3817,5 @@ mouse = libtcod.Mouse()
 key = libtcod.Key()
 
 # open the main menu
+print('opening main menu...')
 main_menu()
