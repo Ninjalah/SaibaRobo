@@ -1051,9 +1051,9 @@ class Terminal:
     def access(self):
         if not self.is_accessed:
             message('You attempt to access the terminal...', libtcod.green)
-            self.access_function()
-            self.is_accessed = True
-            self.owner.color = INACTIVE_TERMINAL_COLOR
+            if self.access_function() is True:
+                self.is_accessed = True
+                self.owner.color = INACTIVE_TERMINAL_COLOR
         else:
             message('The terminal is turned off.', libtcod.red)
 
@@ -1298,21 +1298,25 @@ def place_doors():
                         #     objects.append(door)
 
 # TODO: Finish this function!
+# TODO: Change so that when iterating through rooms, you iterate only through the necessary coordinates instead of the entire map and check for intersections.
+# TODO: Fix how terminals are placed usually in the same room (setting a flag should be enough but isn't working?)
 # place terminals randomly in rooms located around the map
 def place_terminals():
     global map, rooms
 
-    terminal_placed = False
-    for room in rooms:
+    max_terminals = 2
+    terminals_placed = 0
+    for room in rooms: # iterate through all rooms on the map
         r_int = libtcod.random_get_int(0, 1, 100)
-        if r_int <= 10:
-            while not terminal_placed:
-                for y in range(MAP_HEIGHT):
+        if r_int <= 10: # 10% chance to choose this room to place a terminal
+            while terminals_placed < max_terminals: # while we still want to place terminals
+                terminal_placed = False
+                for y in range(MAP_HEIGHT): # iterate through the coordinates in a room
                     for x in range(MAP_WIDTH):
                         p_int = libtcod.random_get_int(0, 1, 100)
-                        if p_int < 5 and not is_blocked(x, y) and not is_in_hallway(x, y):
+                        if p_int <= 5 and not is_blocked(x, y) and not is_in_hallway(x, y): # 5% chance to place at this position if it's not blocked and not in a hallway
                             r = Rect(x, y, 1, 1)
-                            if r.intersect(room) and not terminal_placed:
+                            if r.intersect(room) and not terminal_placed: # if the place chosen is in the room and a terminal has not already been placed
                                 print('placing terminal...')
                                 # TODO: Remove below
                                 libtcod.console_set_default_foreground(con, libtcod.white)
@@ -1323,8 +1327,9 @@ def place_terminals():
                                 terminal_component = create_terminal_component()
                                 obj = Object(x, y, '&', 'Terminal', ACTIVE_TERMINAL_COLOR, terminal=terminal_component, blocks=True, always_visible=True, z=ITEM_Z_VAL)
                                 objects.append(obj)
+                                terminals_placed += 1
                                 terminal_placed = True
-    terminal_placed = False
+            terminal_placed = False
     sleep(2)
 
 def make_map():
@@ -1703,7 +1708,7 @@ def create_door_component():
 ## Terminal Creation Function(s) ##
 ###################################
 def create_terminal_component():
-    return Terminal(access_function=cast_heal)
+    return Terminal(access_function=cast_terminal_heal)
 
 ################################
 ## Monster Creation Functions ##
@@ -2652,6 +2657,7 @@ def move_reticule(dx, dy):
 # TODO: Leverage these functions to work on player, mobs, etc. Later, it will be possible for the player to throw shady potions
 # at a mob to test what the potion is. Perhaps these functions can receive a coordinate tuple, and after it is thrown/used, get any
 # Fighter (or otherwise) object and apply the function to said object.
+
 # heal the player
 def cast_heal():
     if player.fighter.hp >= player.fighter.base_max_hp: # don't heal the player if at full hp already
@@ -2660,6 +2666,16 @@ def cast_heal():
 
     message('Your wounds start to feel better!', libtcod.light_violet)
     player.fighter.heal(HEAL_AMOUNT)
+
+# heal the player (terminal version returns true/false)
+def cast_terminal_heal():
+    if player.fighter.hp >= player.fighter.base_max_hp: # don't heal the player if at full hp already
+        message('You are already at full health.', libtcod.red)
+        return False
+
+    message('Your wounds start to feel better!', libtcod.light_violet)
+    player.fighter.heal(HEAL_AMOUNT)
+    return True
 
 # increase the player's STR by 1
 def cast_increase_strength():
