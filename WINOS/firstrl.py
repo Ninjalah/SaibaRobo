@@ -1297,40 +1297,35 @@ def place_doors():
                         #     door.door.close()
                         #     objects.append(door)
 
-# TODO: Finish this function!
-# TODO: Change so that when iterating through rooms, you iterate only through the necessary coordinates instead of the entire map and check for intersections.
-# TODO: Fix how terminals are placed usually in the same room (setting a flag should be enough but isn't working?)
 # place terminals randomly in rooms located around the map
 def place_terminals():
     global map, rooms
 
     max_terminals = 2
-    terminals_placed = 0
-    for room in rooms: # iterate through all rooms on the map
-        r_int = libtcod.random_get_int(0, 1, 100)
-        if r_int <= 10: # 10% chance to choose this room to place a terminal
-            while terminals_placed < max_terminals: # while we still want to place terminals
-                terminal_placed = False
-                for y in range(MAP_HEIGHT): # iterate through the coordinates in a room
-                    for x in range(MAP_WIDTH):
-                        p_int = libtcod.random_get_int(0, 1, 100)
-                        if p_int <= 5 and not is_blocked(x, y) and not is_in_hallway(x, y): # 5% chance to place at this position if it's not blocked and not in a hallway
-                            r = Rect(x, y, 1, 1)
-                            if r.intersect(room) and not terminal_placed: # if the place chosen is in the room and a terminal has not already been placed
-                                print('placing terminal...')
-                                # TODO: Remove below
-                                libtcod.console_set_default_foreground(con, libtcod.white)
-                                libtcod.console_put_char(con, x, y, 'T', libtcod.BKGND_NONE)
-                                libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
-                                libtcod.console_flush()
-                                # Place Terminal
-                                terminal_component = create_terminal_component()
-                                obj = Object(x, y, '&', 'Terminal', ACTIVE_TERMINAL_COLOR, terminal=terminal_component, blocks=True, always_visible=True, z=ITEM_Z_VAL)
-                                objects.append(obj)
-                                terminals_placed += 1
-                                terminal_placed = True
-            terminal_placed = False
-    sleep(2)
+    max_terminals = libtcod.random_get_int(0, 0, max_terminals)
+    # ATTEMPT TWO
+    # 1) use random.sample(arr, len(arr)) to shuffle rooms, then choose max_terminals from the front/back
+    # NOTE: random.sample(x, len(x)) is used here as it does NOT change the global rooms array
+    # 2) iterate through that new room array and place terminals randomly
+    chosen_rooms = random.sample(rooms, max_terminals)
+    for chosen_room in chosen_rooms:
+        (x1, y1, x2, y2) = (chosen_room.x1, chosen_room.y1, chosen_room.x2, chosen_room.y2)
+        is_terminal_placed = False
+        while not is_terminal_placed:
+            for l_x in range(x1, x2):
+                for l_y in range(y1, y2):
+                    p_int = libtcod.random_get_int(0, 1, ((x2-x1)*(y2-y1)))
+                    if p_int <= 1 and not is_blocked(l_x, l_y) and not is_terminal_placed: # equal chance for each tile in a room to be picked | Need "and not is_in_hallway(l_x, l_y)"         
+                        # DEBUG: Remove below
+                        # libtcod.console_set_default_foreground(con, libtcod.white)
+                        # libtcod.console_put_char(con, l_x, l_y, 'T', libtcod.BKGND_NONE)
+                        # libtcod.console_blit(con, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0)
+                        # libtcod.console_flush()
+                        # Place Terminal
+                        terminal_component = create_terminal_component()
+                        obj = Object(l_x, l_y, '&', 'Terminal', ACTIVE_TERMINAL_COLOR, terminal=terminal_component, blocks=True, always_visible=True, z=ITEM_Z_VAL)
+                        objects.append(obj)
+                        is_terminal_placed = True
 
 def make_map():
     global map, objects, stairs, rooms
